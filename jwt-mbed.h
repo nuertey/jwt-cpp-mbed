@@ -103,6 +103,7 @@ namespace jwt
              */
             std::string sign(const std::string& data, std::error_code& ec) const
             {
+                int rc = ErrorStatus_t::SUCCESS;
                 std::string res;
                 mbedtls_md_context_t ctx;
 
@@ -204,7 +205,7 @@ namespace jwt
              */
             std::string sign(const std::string& data, std::error_code& ec) const
             {
-                int rc = 0;
+                int rc = ErrorStatus_t::SUCCESS;
                 size_t sig_len;
                 char * buffer;
 
@@ -227,7 +228,7 @@ namespace jwt
                 if (rc != ErrorStatus_t::SUCCESS) 
                 {
                     tr_warn("RSA failed to parse private key (-0x%04x)", ret);
-                    ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                    ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
                 }
                 else
                 {
@@ -252,17 +253,19 @@ namespace jwt
                         return "";
                     }
                     
-                    // Calculate hash
+                    // Calculate the message digest (i.e. hash) for the data.
                     mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
                     char *md = malloc(mdinfo->size);
-                    
-                    // Calculate the message digest (i.e. hash) for the data.
                     rc = mbedtls_md(mdinfo, data.data(), data.size(), md);
                     
                     if (rc != ErrorStatus_t::SUCCESS) 
                     {
                         tr_error("RSA failed to calculate hash (-0x%04x)", rc);
+                        free(md);
+                        mbedtls_ctr_drbg_free(&ctr_drbg);
+                        mbedtls_pk_free(&pk);
                         ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
+                        return "";
                     }
                     else
                     {
@@ -281,7 +284,10 @@ namespace jwt
                 {
                     tr_err("Failed in mbedtls_pk_sign.");
                     ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
-                    delete []buffer;
+                    if (buffer)
+                    {
+                        delete []buffer;
+                    }
                     return "";
                 }
 
@@ -298,7 +304,7 @@ namespace jwt
             void verify(const std::string& data, const std::string& signature, 
                         std::error_code& ec) const
             {
-                int ret;
+                int ret = ErrorStatus_t::SUCCESS;
                 mbedtls_pk_context pk;
                 mbedtls_pk_init(&pk);
 
@@ -306,19 +312,18 @@ namespace jwt
                 if (ret != ErrorStatus_t::SUCCESS) 
                 {
                     tr_warn("RSA failed to parse public key (-0x%04x)", ret);
-                    ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                    ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
                 }
                 else
                 {
+                    // Calculate the message digest (i.e. hash) for the data.
                     mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
                     char *md = malloc(mdinfo->size);
-                    
-                    // Calculate the message digest (i.e. hash) for the data.
                     ret = mbedtls_md(mdinfo, data.data(), data.size(), md);
                     
                     if (ret != ErrorStatus_t::SUCCESS) 
                     {
-                        tr_error("RSA failed to verify message (-0x%04x)", ret);
+                        tr_error("RSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
                         ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
                     }
                     else
@@ -373,31 +378,18 @@ namespace jwt
              * \param md Pointer to hash function
              * \param name Name of the algorithm
              */
-            ecdsa(const std::string& public_key, const std::string& private_key, const std::string& public_key_password, const std::string& private_key_password, const EVP_MD*(*md)(), const std::string& name)
-                : md(md), alg_name(name)
+            ecdsa(const std::string& public_key, const std::string& private_key, 
+                const std::string& public_key_password="", const std::string& private_key_password="", 
+                const mbedtls_md_type_t& mdAlgorithm = MBEDTLS_MD_SHA1, const std::string& name)
+                : m_publicKey(public_key)
+                , m_privateKey(private_key) 
+                , m_publicKeyPassword(public_key_password.empty() ? 
+                            std::nullopt : std::make_optional(public_key_password)) 
+                , m_privateKeyPassword(private_key_password.empty() ?
+                            std::nullopt : std::make_optional(private_key_password))
+                , m_messageDigestAlgorithm(mdAlgorithm)
+                , m_algorithmName(name)
             {
-                if (private_key.empty())
-                {
-                    std::unique_ptr<BIO, decltype(&BIO_free_all)> pubkey_bio(BIO_new(BIO_s_mem()), BIO_free_all);
-                    if ((size_t)BIO_write(pubkey_bio.get(), public_key.data(), public_key.size()) != public_key.size())
-                        throw ecdsa_exception("failed to load public key: bio_write failed");
-
-                    pkey.reset(PEM_read_bio_EC_PUBKEY(pubkey_bio.get(), nullptr, nullptr, (void*)public_key_password.c_str()), EC_KEY_free);
-                    if (!pkey)
-                        throw ecdsa_exception("failed to load public key: PEM_read_bio_EC_PUBKEY failed");
-                }
-                else
-                {
-                    std::unique_ptr<BIO, decltype(&BIO_free_all)> privkey_bio(BIO_new(BIO_s_mem()), BIO_free_all);
-                    if ((size_t)BIO_write(privkey_bio.get(), private_key.data(), private_key.size()) != private_key.size())
-                        throw ecdsa_exception("failed to load private key: bio_write failed");
-                    pkey.reset(PEM_read_bio_ECPrivateKey(privkey_bio.get(), nullptr, nullptr, (void*)private_key_password.c_str()), EC_KEY_free);
-                    if (!pkey)
-                        throw ecdsa_exception("failed to load private key: PEM_read_bio_RSAPrivateKey failed");
-                }
-
-                if(EC_KEY_check_key(pkey.get()) == 0)
-                    throw ecdsa_exception("failed to load key: key is invalid");
             }
             /**
              * Sign jwt data
@@ -405,23 +397,101 @@ namespace jwt
              * \return ECDSA signature for the given data
              * \throws signature_generation_exception
              */
-            std::string sign(const std::string& data) const
+            std::string sign(const std::string& data, std::error_code& ec) const
             {
-                const std::string hash = generate_hash(data);
+                int rc = ErrorStatus_t::SUCCESS;
+                size_t sig_len;
+                char * buffer;
 
-                std::unique_ptr<ECDSA_SIG, decltype(&ECDSA_SIG_free)>
-                sig(ECDSA_do_sign((const unsigned char*)hash.data(), hash.size(), pkey.get()), ECDSA_SIG_free);
-                if(!sig)
-                    throw signature_generation_exception();
-#ifdef OPENSSL10
+                // A generic layer is provided to access the RSA / ECDSA
+                // functions in the form of the PK (Public Key) layer.
+                mbedtls_pk_context pk;
+                mbedtls_pk_init(&pk);
+                
+                // Parse key
+                if (!m_privateKeyPassword)
+                {
+                    rc = mbedtls_pk_parse_key(&pk, m_privateKey.data(), 
+                                          m_privateKey.size(), nullptr, 0);
+                }
+                else
+                {
+                    rc = mbedtls_pk_parse_key(&pk, m_privateKey.data(), 
+                                          m_privateKey.size(), 
+                                          (*m_privateKeyPassword).data(), 
+                                          (*m_privateKeyPassword).size());                
+                }
+                if (rc != ErrorStatus_t::SUCCESS) 
+                {
+                    tr_warn("ECDSA failed to parse private key (-0x%04x)", ret);
+                    ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
+                }
+                else
+                {
+                    // Cannot asset on key type here for extra safety check.
+                    
+                    // Set up CTR-DRBG
+                    const char *pers = "mbedtls_pk_sign";
+                    mbedtls_ctr_drbg_context ctr_drbg;
+                    mbedtls_ctr_drbg_init(&ctr_drbg);
 
-                return bn2raw(sig->r) + bn2raw(sig->s);
-#else
-                const BIGNUM *r;
-                const BIGNUM *s;
-                ECDSA_SIG_get0(sig.get(), &r, &s);
-                return bn2raw(r) + bn2raw(s);
-#endif
+                    // Set up entropy
+                    mbedtls_entropy_context entropy;
+                    mbedtls_entropy_init(&entropy);
+                    rc = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+                            (const unsigned char *)pers, strlen(pers));
+                    mbedtls_entropy_free(&entropy);
+                    
+                    if (rc != ErrorStatus_t::SUCCESS) 
+                    {
+                        tr_err("Failed in mbed_tls_ctr_drbg_seed().");
+                        mbedtls_ctr_drbg_free(&ctr_drbg);
+                        mbedtls_pk_free(&pk);
+                        ec = make_error_code(ErrorStatus_t::MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED);
+                        return "";
+                    }
+                    
+                    // Calculate the message digest (i.e. hash) for the data.
+                    mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                    char *md = malloc(mdinfo->size);
+                    rc = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                    
+                    if (rc != ErrorStatus_t::SUCCESS) 
+                    {
+                        tr_error("ECDSA failed to calculate hash (-0x%04x)", rc);
+                        free(md);
+                        mbedtls_ctr_drbg_free(&ctr_drbg);
+                        mbedtls_pk_free(&pk);
+                        ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
+                        return "";
+                    }
+                    else
+                    {
+                        buffer = new char[1024];
+                        // Sign
+                        rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
+                                mdinfo->size, buffer, &sig_len, 
+                                mbedtls_ctr_drbg_random, &ctr_drbg);
+                    }
+                    free(md);
+                    mbedtls_ctr_drbg_free(&ctr_drbg);
+                }
+                mbedtls_pk_free(&pk);
+
+                if (rc != ErrorStatus_t::SUCCESS) 
+                {
+                    tr_err("Failed in mbedtls_pk_sign.");
+                    ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
+                    if (buffer)
+                    {
+                        delete []buffer;
+                    }
+                    return "";
+                }
+
+                std::string res(buffer, sig_len);
+                delete []buffer;
+                return res;
             }
             /**
              * Check if signature is valid
@@ -429,27 +499,52 @@ namespace jwt
              * \param signature Signature provided by the jwt
              * \throws signature_verification_exception If the provided signature does not match
              */
-            void verify(const std::string& data, const std::string& signature) const
+             void verify(const std::string& data, const std::string& signature, 
+                        std::error_code& ec) const
             {
-                const std::string hash = generate_hash(data);
-                auto r = raw2bn(signature.substr(0, signature.size() / 2));
-                auto s = raw2bn(signature.substr(signature.size() / 2));
+                int ret = ErrorStatus_t::SUCCESS;
+                mbedtls_pk_context pk;
+                mbedtls_pk_init(&pk);
 
-#ifdef OPENSSL10
-                ECDSA_SIG sig;
-                sig.r = r.get();
-                sig.s = s.get();
+                ret = mbedtls_pk_parse_public_key(&pk, m_publicKey.data(), m_publicKey.size());
+                if (ret != ErrorStatus_t::SUCCESS) 
+                {
+                    tr_warn("ECDSA failed to parse public key (-0x%04x)", ret);
+                    ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                }
+                else
+                {
+                    // Calculate the message digest (i.e. hash) for the data.
+                    mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                    char *md = malloc(mdinfo->size);
+                    ret = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                    
+                    if (ret != ErrorStatus_t::SUCCESS) 
+                    {
+                        tr_error("ECDSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
+                        ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                    }
+                    else
+                    {
+                        // Now verify the signature for the given hash of the data.
+                        ret = mbedtls_pk_verify(&pk, 
+                                                mdinfo->type, md, mdinfo->size,
+                                                (const unsigned char*)signature.data(), 
+                                                signature.size());
 
-                if(ECDSA_do_verify((const unsigned char*)hash.data(), hash.size(), &sig, pkey.get()) != 1)
-                    throw signature_verification_exception("Invalid signature");
-#else
-                ECDSA_SIG *sig = ECDSA_SIG_new();
-
-                ECDSA_SIG_set0(sig, r.get(), s.get());
-
-                if(ECDSA_do_verify((const unsigned char*)hash.data(), hash.size(), sig, pkey.get()) != 1)
-                    throw signature_verification_exception("Invalid signature");
-#endif
+                        if (ret != ErrorStatus_t::SUCCESS) 
+                        {
+                            tr_error("ECDSA failed to verify message (-0x%04x)", ret);
+                            ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                        }
+                        else
+                        {
+                            tr_debug("Signature valid");
+                        }
+                    }
+                    free(md);
+                }
+                mbedtls_pk_free(&pk);
             }
             /**
              * Returns the algorithm name provided to the constructor
@@ -457,75 +552,17 @@ namespace jwt
              */
             std::string name() const
             {
-                return alg_name;
+                return m_algorithmName;
             }
         private:
-            /**
-             * Convert a OpenSSL BIGNUM to a std::string
-             * \param bn BIGNUM to convert
-             * \return bignum as string
-             */
-#ifdef OPENSSL10
-            static std::string bn2raw(BIGNUM* bn)
-#else
-            static std::string bn2raw(const BIGNUM* bn)
-#endif
-            {
-                std::string res;
-                res.resize(BN_num_bytes(bn));
-                BN_bn2bin(bn, (unsigned char*)res.data());
-                if(res.size()%2 == 1 && res[0] == 0x00)
-                    return res.substr(1);
-                return res;
-            }
-            /**
-             * Convert an std::string to a OpenSSL BIGNUM
-             * \param raw String to convert
-             * \return BIGNUM representation
-             */
-            static std::unique_ptr<BIGNUM, decltype(&BN_free)> raw2bn(const std::string& raw)
-            {
-                if(static_cast<uint8_t>(raw[0]) >= 0x80)
-                {
-                    std::string str(1, 0x00);
-                    str += raw;
-                    return std::unique_ptr<BIGNUM, decltype(&BN_free)>(BN_bin2bn((const unsigned char*)str.data(), str.size(), nullptr), BN_free);
-                }
-                return std::unique_ptr<BIGNUM, decltype(&BN_free)>(BN_bin2bn((const unsigned char*)raw.data(), raw.size(), nullptr), BN_free);
-            }
-
-            /**
-             * Hash the provided data using the hash function specified in constructor
-             * \param data Data to hash
-             * \return Hash of data
-             */
-            std::string generate_hash(const std::string& data) const
-            {
-#ifdef OPENSSL10
-                std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_destroy)> ctx(EVP_MD_CTX_create(), &EVP_MD_CTX_destroy);
-#else
-                std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> ctx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
-#endif
-                if(EVP_DigestInit(ctx.get(), md()) == 0)
-                    throw signature_generation_exception("EVP_DigestInit failed");
-                if(EVP_DigestUpdate(ctx.get(), data.data(), data.size()) == 0)
-                    throw signature_generation_exception("EVP_DigestUpdate failed");
-                unsigned int len = 0;
-                std::string res;
-                res.resize(EVP_MD_CTX_size(ctx.get()));
-                if(EVP_DigestFinal(ctx.get(), (unsigned char*)res.data(), &len) == 0)
-                    throw signature_generation_exception("EVP_DigestFinal failed");
-                res.resize(len);
-                return res;
-            }
-
-            /// OpenSSL struct containing keys
-            std::shared_ptr<EC_KEY> pkey;
-            /// Hash generator function
-            const EVP_MD*(*md)();
-            /// Algorithmname
-            const std::string alg_name;
+            const std::string                 m_publicKey;
+            const std::string                 m_privateKey; 
+            const std::optional<std::string   m_publicKeyPassword; 
+            const std::optional<std::string>  m_privateKeyPassword;
+            const mbedtls_md_type_t           m_messageDigestAlgorithm; /// Hash generator 
+            const std::string                 m_algorithmName;          /// Algorithmname
         };
+        
         /**
          * Base class for PSS-RSA family of algorithms
          */
@@ -735,7 +772,7 @@ namespace jwt
              * \param privat_key_password Password to decrypt private key pem.
              */
             es256(const std::string& public_key, const std::string& private_key = "", const std::string& public_key_password = "", const std::string& private_key_password = "")
-                : ecdsa(public_key, private_key, public_key_password, private_key_password, EVP_sha256, "ES256")
+                : ecdsa(public_key, private_key, public_key_password, private_key_password, MBEDTLS_MD_SHA256, "ES256")
             {}
         };
         /**
@@ -750,7 +787,7 @@ namespace jwt
              * \param privat_key_password Password to decrypt private key pem.
              */
             es384(const std::string& public_key, const std::string& private_key = "", const std::string& public_key_password = "", const std::string& private_key_password = "")
-                : ecdsa(public_key, private_key, public_key_password, private_key_password, EVP_sha384, "ES384")
+                : ecdsa(public_key, private_key, public_key_password, private_key_password, MBEDTLS_MD_SHA384, "ES384")
             {}
         };
         /**
@@ -765,7 +802,7 @@ namespace jwt
              * \param privat_key_password Password to decrypt private key pem.
              */
             es512(const std::string& public_key, const std::string& private_key = "", const std::string& public_key_password = "", const std::string& private_key_password = "")
-                : ecdsa(public_key, private_key, public_key_password, private_key_password, EVP_sha512, "ES512")
+                : ecdsa(public_key, private_key, public_key_password, private_key_password, MBEDTLS_MD_SHA512, "ES512")
             {}
         };
 
@@ -781,7 +818,7 @@ namespace jwt
              * \param privat_key_password Password to decrypt private key pem.
              */
             ps256(const std::string& public_key, const std::string& private_key = "", const std::string& public_key_password = "", const std::string& private_key_password = "")
-                : pss(public_key, private_key, public_key_password, private_key_password, EVP_sha256, "PS256")
+                : pss(public_key, private_key, public_key_password, private_key_password, MBEDTLS_MD_SHA256, "PS256")
             {}
         };
         /**
@@ -796,7 +833,7 @@ namespace jwt
              * \param privat_key_password Password to decrypt private key pem.
              */
             ps384(const std::string& public_key, const std::string& private_key = "", const std::string& public_key_password = "", const std::string& private_key_password = "")
-                : pss(public_key, private_key, public_key_password, private_key_password, EVP_sha384, "PS384")
+                : pss(public_key, private_key, public_key_password, private_key_password, MBEDTLS_MD_SHA384, "PS384")
             {}
         };
         /**
@@ -811,7 +848,7 @@ namespace jwt
              * \param privat_key_password Password to decrypt private key pem.
              */
             ps512(const std::string& public_key, const std::string& private_key = "", const std::string& public_key_password = "", const std::string& private_key_password = "")
-                : pss(public_key, private_key, public_key_password, private_key_password, EVP_sha512, "PS512")
+                : pss(public_key, private_key, public_key_password, private_key_password, MBEDTLS_MD_SHA512, "PS512")
             {}
         };
     }
