@@ -66,7 +66,7 @@ std::string JWTErrorCategory::message(int ev) const
             return "Buffer size too small";
 
         case ErrorStatus_t::PARSE_KEY_ERROR:
-            return "Parsing private key failed";
+            return "Parsing private or public key failed";
 
         case ErrorStatus_t::INCORRECT_KEY_TYPE_ERROR:
             return "Incorrect private key type detected";
@@ -78,10 +78,10 @@ std::string JWTErrorCategory::message(int ev) const
             return "signature generation failed";
             
         case ErrorStatus_t::RSA_ERROR:
-            return "";
+            return "Generic RSA Error";
 
         case ErrorStatus_t::ECDSA_ERROR:
-            return "";
+            return "Generic ECDSA Error";
 
         case ErrorStatus_t::TOKEN_VERIFICATION_ERROR:
             return "token verification failed";

@@ -3,6 +3,8 @@
 *
 * Header-only library for creating and validating JSON Web Tokens. The
 * library is written in C++ but geared towards ARM Mbed-enabled targets.
+* 
+* Algorithm Standard RFC 7519 : https://tools.ietf.org/html/rfc7519
 *
 * @note     The structure and organization of the library is mostly
 *           ported from jwt-cpp :
@@ -34,7 +36,13 @@
 #include <sstream>
 #include <string>
 #include "mbed.h"
-//#include "mbedtls/base64.h"
+
+// As there are significant deviations from the ported from library, to 
+// minimize such deviations, use the supplied manual base64 operations
+// instead of the ARM MbedTLS one for now. 
+// TBD, Nuertey Odzeyem; revisit if testing indicates anomalies here.
+//#include "mbedtls/base64.h" 
+                   
 #include "mbedtls/error.h"
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
@@ -209,6 +217,10 @@ namespace jwt
                 size_t sig_len;
                 char * buffer;
 
+                // A generic layer is provided to access the RSA / ECDSA
+                // functions in the form of the PK (Public Key) layer.
+                // Mbed TLS advises using the PK layer as opposed to 
+                // directly invoking the ECDSA module.
                 mbedtls_pk_context pk;
                 mbedtls_pk_init(&pk);
                 
@@ -228,61 +240,73 @@ namespace jwt
                 if (rc != ErrorStatus_t::SUCCESS) 
                 {
                     tr_warn("RSA failed to parse private key (-0x%04x)", ret);
-                    ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
+                    ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
                 }
                 else
                 {
-                    // Set up CTR-DRBG
-                    const char *pers = "mbedtls_pk_sign";
-                    mbedtls_ctr_drbg_context ctr_drbg;
-                    mbedtls_ctr_drbg_init(&ctr_drbg);
-
-                    // Set up entropy
-                    mbedtls_entropy_context entropy;
-                    mbedtls_entropy_init(&entropy);
-                    rc = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
-                            (const unsigned char *)pers, strlen(pers));
-                    mbedtls_entropy_free(&entropy);
+                    // Can assert on key type here for extra safety check.
+                    mbedtls_pk_type_t t_pk = MBEDTLS_PK_NONE;
+                    t_pk = mbedtls_pk_get_type(&pk);
                     
-                    if (rc != ErrorStatus_t::SUCCESS) 
+                    if (t_pk != MBEDTLS_PK_RSA) 
                     {
-                        tr_err("Failed in mbed_tls_ctr_drbg_seed().");
-                        mbedtls_ctr_drbg_free(&ctr_drbg);
-                        mbedtls_pk_free(&pk);
-                        ec = make_error_code(ErrorStatus_t::MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED);
-                        return "";
-                    }
-                    
-                    // Calculate the message digest (i.e. hash) for the data.
-                    mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                    char *md = malloc(mdinfo->size);
-                    rc = mbedtls_md(mdinfo, data.data(), data.size(), md);
-                    
-                    if (rc != ErrorStatus_t::SUCCESS) 
-                    {
-                        tr_error("RSA failed to calculate hash (-0x%04x)", rc);
-                        free(md);
-                        mbedtls_ctr_drbg_free(&ctr_drbg);
-                        mbedtls_pk_free(&pk);
-                        ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
-                        return "";
+                        tr_error("RSA Failed. Incorrect key type detected.");
+                        ec = make_error_code(ErrorStatus_t::INCORRECT_KEY_TYPE_ERROR);
                     }
                     else
-                    {
-                        buffer = new char[1024];
-                        // Sign
-                        rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
-                                mdinfo->size, buffer, &sig_len, 
-                                mbedtls_ctr_drbg_random, &ctr_drbg);
+                    {  
+                        // Set up CTR-DRBG
+                        const char *pers = "mbedtls_pk_sign";
+                        mbedtls_ctr_drbg_context ctr_drbg;
+                        mbedtls_ctr_drbg_init(&ctr_drbg);
+
+                        // Set up entropy
+                        mbedtls_entropy_context entropy;
+                        mbedtls_entropy_init(&entropy);
+                        rc = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+                                (const unsigned char *)pers, strlen(pers));
+                        mbedtls_entropy_free(&entropy);
+                        
+                        if (rc != ErrorStatus_t::SUCCESS) 
+                        {
+                            tr_err("Failed in mbed_tls_ctr_drbg_seed().");
+                            mbedtls_ctr_drbg_free(&ctr_drbg);
+                            mbedtls_pk_free(&pk);
+                            ec = make_error_code(ErrorStatus_t::MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED);
+                            return "";
+                        }
+                        
+                        // Calculate the message digest (i.e. hash) for the data.
+                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        char *md = malloc(mdinfo->size);
+                        rc = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        
+                        if (rc != ErrorStatus_t::SUCCESS) 
+                        {
+                            tr_error("RSA failed to calculate hash (-0x%04x)", rc);
+                            free(md);
+                            mbedtls_ctr_drbg_free(&ctr_drbg);
+                            mbedtls_pk_free(&pk);
+                            ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
+                            return "";
+                        }
+                        else
+                        {
+                            buffer = new char[MBEDTLS_MPI_MAX_SIZE];
+                            // Sign
+                            rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
+                                    mdinfo->size, buffer, &sig_len, 
+                                    mbedtls_ctr_drbg_random, &ctr_drbg);
+                        }
+                        free(md);
+                        mbedtls_ctr_drbg_free(&ctr_drbg);
                     }
-                    free(md);
-                    mbedtls_ctr_drbg_free(&ctr_drbg);
                 }
                 mbedtls_pk_free(&pk);
 
                 if (rc != ErrorStatus_t::SUCCESS) 
                 {
-                    tr_err("Failed in mbedtls_pk_sign.");
+                    tr_err("RSA : Failed in mbedtls_pk_sign.");
                     ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
                     if (buffer)
                     {
@@ -316,35 +340,47 @@ namespace jwt
                 }
                 else
                 {
-                    // Calculate the message digest (i.e. hash) for the data.
-                    mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                    char *md = malloc(mdinfo->size);
-                    ret = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                    // Can assert on key type here for extra safety check.
+                    mbedtls_pk_type_t t_pk = MBEDTLS_PK_NONE;
+                    t_pk = mbedtls_pk_get_type(&pk);
                     
-                    if (ret != ErrorStatus_t::SUCCESS) 
+                    if (t_pk != MBEDTLS_PK_RSA) 
                     {
-                        tr_error("RSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
-                        ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                        tr_error("RSA Failed. Incorrect key type detected.");
+                        ec = make_error_code(ErrorStatus_t::INCORRECT_KEY_TYPE_ERROR);
                     }
                     else
-                    {
-                        // Now verify the signature for the given hash of the data.
-                        ret = mbedtls_pk_verify(&pk, 
-                                                mdinfo->type, md, mdinfo->size,
-                                                (const unsigned char*)signature.data(), 
-                                                signature.size());
-
+                    { 
+                        // Calculate the message digest (i.e. hash) for the data.
+                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        char *md = malloc(mdinfo->size);
+                        ret = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        
                         if (ret != ErrorStatus_t::SUCCESS) 
                         {
-                            tr_error("RSA failed to verify message (-0x%04x)", ret);
+                            tr_error("RSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
                             ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
                         }
                         else
                         {
-                            tr_debug("Signature valid");
+                            // Now verify the signature for the given hash of the data.
+                            ret = mbedtls_pk_verify(&pk, 
+                                                    mdinfo->type, md, mdinfo->size,
+                                                    (const unsigned char*)signature.data(), 
+                                                    signature.size());
+
+                            if (ret != ErrorStatus_t::SUCCESS) 
+                            {
+                                tr_error("RSA failed to verify message (-0x%04x)", ret);
+                                ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                            }
+                            else
+                            {
+                                tr_debug("RSA : Signature valid");
+                            }
                         }
+                        free(md);
                     }
-                    free(md);
                 }
                 mbedtls_pk_free(&pk);
             }
@@ -405,6 +441,8 @@ namespace jwt
 
                 // A generic layer is provided to access the RSA / ECDSA
                 // functions in the form of the PK (Public Key) layer.
+                // Mbed TLS advises using the PK layer as opposed to 
+                // directly invoking the ECDSA module.
                 mbedtls_pk_context pk;
                 mbedtls_pk_init(&pk);
                 
@@ -428,59 +466,69 @@ namespace jwt
                 }
                 else
                 {
-                    // Cannot asset on key type here for extra safety check.
+                    // Can assert on key type here for extra safety check.
+                    mbedtls_pk_type_t t_pk = MBEDTLS_PK_NONE;
+                    t_pk = mbedtls_pk_get_type(&pk);
                     
-                    // Set up CTR-DRBG
-                    const char *pers = "mbedtls_pk_sign";
-                    mbedtls_ctr_drbg_context ctr_drbg;
-                    mbedtls_ctr_drbg_init(&ctr_drbg);
-
-                    // Set up entropy
-                    mbedtls_entropy_context entropy;
-                    mbedtls_entropy_init(&entropy);
-                    rc = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
-                            (const unsigned char *)pers, strlen(pers));
-                    mbedtls_entropy_free(&entropy);
-                    
-                    if (rc != ErrorStatus_t::SUCCESS) 
+                    if (t_pk != MBEDTLS_PK_ECDSA) 
                     {
-                        tr_err("Failed in mbed_tls_ctr_drbg_seed().");
-                        mbedtls_ctr_drbg_free(&ctr_drbg);
-                        mbedtls_pk_free(&pk);
-                        ec = make_error_code(ErrorStatus_t::MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED);
-                        return "";
-                    }
-                    
-                    // Calculate the message digest (i.e. hash) for the data.
-                    mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                    char *md = malloc(mdinfo->size);
-                    rc = mbedtls_md(mdinfo, data.data(), data.size(), md);
-                    
-                    if (rc != ErrorStatus_t::SUCCESS) 
-                    {
-                        tr_error("ECDSA failed to calculate hash (-0x%04x)", rc);
-                        free(md);
-                        mbedtls_ctr_drbg_free(&ctr_drbg);
-                        mbedtls_pk_free(&pk);
-                        ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
-                        return "";
+                        tr_error("ECDSA Failed. Incorrect key type detected.");
+                        ec = make_error_code(ErrorStatus_t::INCORRECT_KEY_TYPE_ERROR);
                     }
                     else
-                    {
-                        buffer = new char[1024];
-                        // Sign
-                        rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
-                                mdinfo->size, buffer, &sig_len, 
-                                mbedtls_ctr_drbg_random, &ctr_drbg);
+                    {                    
+                        // Set up CTR-DRBG
+                        const char *pers = "mbedtls_pk_sign";
+                        mbedtls_ctr_drbg_context ctr_drbg;
+                        mbedtls_ctr_drbg_init(&ctr_drbg);
+
+                        // Set up entropy
+                        mbedtls_entropy_context entropy;
+                        mbedtls_entropy_init(&entropy);
+                        rc = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+                                (const unsigned char *)pers, strlen(pers));
+                        mbedtls_entropy_free(&entropy);
+                        
+                        if (rc != ErrorStatus_t::SUCCESS) 
+                        {
+                            tr_err("Failed in mbed_tls_ctr_drbg_seed().");
+                            mbedtls_ctr_drbg_free(&ctr_drbg);
+                            mbedtls_pk_free(&pk);
+                            ec = make_error_code(ErrorStatus_t::MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED);
+                            return "";
+                        }
+                        
+                        // Calculate the message digest (i.e. hash) for the data.
+                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        char *md = malloc(mdinfo->size);
+                        rc = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        
+                        if (rc != ErrorStatus_t::SUCCESS) 
+                        {
+                            tr_error("ECDSA failed to calculate hash (-0x%04x)", rc);
+                            free(md);
+                            mbedtls_ctr_drbg_free(&ctr_drbg);
+                            mbedtls_pk_free(&pk);
+                            ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
+                            return "";
+                        }
+                        else
+                        {
+                            buffer = new char[MBEDTLS_MPI_MAX_SIZE];
+                            // Sign
+                            rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
+                                    mdinfo->size, buffer, &sig_len, 
+                                    mbedtls_ctr_drbg_random, &ctr_drbg);
+                        }
+                        free(md);
+                        mbedtls_ctr_drbg_free(&ctr_drbg);
                     }
-                    free(md);
-                    mbedtls_ctr_drbg_free(&ctr_drbg);
                 }
                 mbedtls_pk_free(&pk);
 
                 if (rc != ErrorStatus_t::SUCCESS) 
                 {
-                    tr_err("Failed in mbedtls_pk_sign.");
+                    tr_err("ECDSA: Failed in mbedtls_pk_sign.");
                     ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
                     if (buffer)
                     {
@@ -510,39 +558,51 @@ namespace jwt
                 if (ret != ErrorStatus_t::SUCCESS) 
                 {
                     tr_warn("ECDSA failed to parse public key (-0x%04x)", ret);
-                    ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                    ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
                 }
                 else
                 {
-                    // Calculate the message digest (i.e. hash) for the data.
-                    mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                    char *md = malloc(mdinfo->size);
-                    ret = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                    // Can assert on key type here for extra safety check.
+                    mbedtls_pk_type_t t_pk = MBEDTLS_PK_NONE;
+                    t_pk = mbedtls_pk_get_type(&pk);
                     
-                    if (ret != ErrorStatus_t::SUCCESS) 
+                    if (t_pk != MBEDTLS_PK_ECDSA) 
                     {
-                        tr_error("ECDSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
-                        ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                        tr_error("ECDSA Failed. Incorrect key type detected.");
+                        ec = make_error_code(ErrorStatus_t::INCORRECT_KEY_TYPE_ERROR);
                     }
                     else
-                    {
-                        // Now verify the signature for the given hash of the data.
-                        ret = mbedtls_pk_verify(&pk, 
-                                                mdinfo->type, md, mdinfo->size,
-                                                (const unsigned char*)signature.data(), 
-                                                signature.size());
-
+                    { 
+                        // Calculate the message digest (i.e. hash) for the data.
+                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        char *md = malloc(mdinfo->size);
+                        ret = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        
                         if (ret != ErrorStatus_t::SUCCESS) 
                         {
-                            tr_error("ECDSA failed to verify message (-0x%04x)", ret);
+                            tr_error("ECDSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
                             ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
                         }
                         else
                         {
-                            tr_debug("Signature valid");
+                            // Now verify the signature for the given hash of the data.
+                            ret = mbedtls_pk_verify(&pk, 
+                                                    mdinfo->type, md, mdinfo->size,
+                                                    (const unsigned char*)signature.data(), 
+                                                    signature.size());
+
+                            if (ret != ErrorStatus_t::SUCCESS) 
+                            {
+                                tr_error("ECDSA failed to verify message (-0x%04x)", ret);
+                                ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                            }
+                            else
+                            {
+                                tr_debug("ECDSA: Signature valid");
+                            }
                         }
+                        free(md);
                     }
-                    free(md);
                 }
                 mbedtls_pk_free(&pk);
             }
@@ -576,48 +636,134 @@ namespace jwt
              * \param md Pointer to hash function
              * \param name Name of the algorithm
              */
-            pss(const std::string& public_key, const std::string& private_key, const std::string& public_key_password, const std::string& private_key_password, const EVP_MD*(*md)(), const std::string& name)
-                : md(md), alg_name(name)
+            pss(const std::string& public_key, const std::string& private_key, 
+                const std::string& public_key_password="", const std::string& private_key_password="", 
+                const mbedtls_md_type_t& mdAlgorithm = MBEDTLS_MD_SHA1, const std::string& name)
+                : m_publicKey(public_key)
+                , m_privateKey(private_key) 
+                , m_publicKeyPassword(public_key_password.empty() ? 
+                            std::nullopt : std::make_optional(public_key_password)) 
+                , m_privateKeyPassword(private_key_password.empty() ?
+                            std::nullopt : std::make_optional(private_key_password))
+                , m_messageDigestAlgorithm(mdAlgorithm)
+                , m_algorithmName(name)
             {
-                std::unique_ptr<BIO, decltype(&BIO_free_all)> pubkey_bio(BIO_new(BIO_s_mem()), BIO_free_all);
-                if ((size_t)BIO_write(pubkey_bio.get(), public_key.data(), public_key.size()) != public_key.size())
-                    throw rsa_exception("failed to load public key: bio_write failed");
-                pkey.reset(PEM_read_bio_PUBKEY(pubkey_bio.get(), nullptr, nullptr, (void*)public_key_password.c_str()), EVP_PKEY_free);
-                if (!pkey)
-                    throw rsa_exception("failed to load public key: PEM_read_bio_PUBKEY failed");
-
-                if (!private_key.empty()) {
-                    std::unique_ptr<BIO, decltype(&BIO_free_all)> privkey_bio(BIO_new(BIO_s_mem()), BIO_free_all);
-                    if ((size_t)BIO_write(privkey_bio.get(), private_key.data(), private_key.size()) != private_key.size())
-                        throw rsa_exception("failed to load private key: bio_write failed");
-                    RSA* privkey = PEM_read_bio_RSAPrivateKey(privkey_bio.get(), nullptr, nullptr, (void*)private_key_password.c_str());
-                    if (privkey == nullptr)
-                        throw rsa_exception("failed to load private key: PEM_read_bio_RSAPrivateKey failed");
-                    if (EVP_PKEY_assign_RSA(pkey.get(), privkey) == 0) {
-                        RSA_free(privkey);
-                        throw rsa_exception("failed to load private key: EVP_PKEY_assign_RSA failed");
-                    }
-                }
             }
             /**
              * Sign jwt data
              * \param data The data to sign
-             * \return ECDSA signature for the given data
+             * \return PSS-RSA signature for the given data
              * \throws signature_generation_exception
              */
-            std::string sign(const std::string& data) const {
-                auto hash = this->generate_hash(data);
+            std::string sign(const std::string& data, std::error_code& ec) const
+            {
+                int rc = ErrorStatus_t::SUCCESS;
+                size_t sig_len;
+                char * buffer;
 
-                std::unique_ptr<RSA, decltype(&RSA_free)> key(EVP_PKEY_get1_RSA(pkey.get()), RSA_free);
-                const int size = RSA_size(key.get());
+                // A generic layer is provided to access the RSA / ECDSA
+                // functions in the form of the PK (Public Key) layer.
+                // Mbed TLS advises using the PK layer as opposed to 
+                // directly invoking the ECDSA module.
+                mbedtls_pk_context pk;
+                mbedtls_pk_init(&pk);
+                
+                // Parse key
+                if (!m_privateKeyPassword)
+                {
+                    rc = mbedtls_pk_parse_key(&pk, m_privateKey.data(), 
+                                          m_privateKey.size(), nullptr, 0);
+                }
+                else
+                {
+                    rc = mbedtls_pk_parse_key(&pk, m_privateKey.data(), 
+                                          m_privateKey.size(), 
+                                          (*m_privateKeyPassword).data(), 
+                                          (*m_privateKeyPassword).size());                
+                }
+                if (rc != ErrorStatus_t::SUCCESS) 
+                {
+                    tr_warn("PSS-RSA failed to parse private key (-0x%04x)", ret);
+                    ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
+                }
+                else
+                {
+                    // Can assert on key type here for extra safety check.
+                    mbedtls_pk_type_t t_pk = MBEDTLS_PK_NONE;
+                    t_pk = mbedtls_pk_get_type(&pk);
+                    
+                    if (t_pk != MBEDTLS_PK_RSA) 
+                    {
+                        tr_error("PSS-RSA Failed. Incorrect key type detected.");
+                        ec = make_error_code(ErrorStatus_t::INCORRECT_KEY_TYPE_ERROR);
+                    }
+                    else
+                    {                    
+                        // Set up CTR-DRBG
+                        const char *pers = "rsa_sign_pss";
+                        mbedtls_ctr_drbg_context ctr_drbg;
+                        mbedtls_ctr_drbg_init(&ctr_drbg);
 
-                std::string padded(size, 0x00);
-                if (!RSA_padding_add_PKCS1_PSS_mgf1(key.get(), (unsigned char*)padded.data(), (const unsigned char*)hash.data(), md(), md(), -1))  
-                    throw signature_generation_exception("failed to create signature: RSA_padding_add_PKCS1_PSS_mgf1 failed");
+                        // Set up entropy
+                        mbedtls_entropy_context entropy;
+                        mbedtls_entropy_init(&entropy);
+                        rc = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+                                (const unsigned char *)pers, strlen(pers));
+                        mbedtls_entropy_free(&entropy);
+                        
+                        if (rc != ErrorStatus_t::SUCCESS) 
+                        {
+                            tr_err("Failed in mbed_tls_ctr_drbg_seed().");
+                            mbedtls_ctr_drbg_free(&ctr_drbg);
+                            mbedtls_pk_free(&pk);
+                            ec = make_error_code(ErrorStatus_t::MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED);
+                            return "";
+                        }
+                        mbedtls_rsa_set_padding(mbedtls_pk_rsa(pk), 
+                                                MBEDTLS_RSA_PKCS_V21, 
+                                                m_messageDigestAlgorithm);
 
-                std::string res(size, 0x00);
-                if (RSA_private_encrypt(size, (const unsigned char*)padded.data(), (unsigned char*)res.data(), key.get(), RSA_NO_PADDING) < 0)
-                    throw signature_generation_exception("failed to create signature: RSA_private_encrypt failed");
+                        // Calculate the message digest (i.e. hash) for the data.
+                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        char *md = malloc(mdinfo->size);
+                        rc = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        
+                        if (rc != ErrorStatus_t::SUCCESS) 
+                        {
+                            tr_error("PSS-RSA failed to calculate hash (-0x%04x)", rc);
+                            free(md);
+                            mbedtls_ctr_drbg_free(&ctr_drbg);
+                            mbedtls_pk_free(&pk);
+                            ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
+                            return "";
+                        }
+                        else
+                        {
+                            buffer = new char[MBEDTLS_MPI_MAX_SIZE];
+                            // Sign
+                            rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
+                                    mdinfo->size, buffer, &sig_len, 
+                                    mbedtls_ctr_drbg_random, &ctr_drbg);
+                        }
+                        free(md);
+                        mbedtls_ctr_drbg_free(&ctr_drbg);
+                    }
+                }
+                mbedtls_pk_free(&pk);
+
+                if (rc != ErrorStatus_t::SUCCESS) 
+                {
+                    tr_err("PSS-RSA: Failed in mbedtls_pk_sign.");
+                    ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
+                    if (buffer)
+                    {
+                        delete []buffer;
+                    }
+                    return "";
+                }
+
+                std::string res(buffer, sig_len);
+                delete []buffer;
                 return res;
             }
             /**
@@ -626,57 +772,80 @@ namespace jwt
              * \param signature Signature provided by the jwt
              * \throws signature_verification_exception If the provided signature does not match
              */
-            void verify(const std::string& data, const std::string& signature) const {
-                auto hash = this->generate_hash(data);
+             void verify(const std::string& data, const std::string& signature, 
+                        std::error_code& ec) const
+            {
+                int ret = ErrorStatus_t::SUCCESS;
+                mbedtls_pk_context pk;
+                mbedtls_pk_init(&pk);
 
-                std::unique_ptr<RSA, decltype(&RSA_free)> key(EVP_PKEY_get1_RSA(pkey.get()), RSA_free);
-                const int size = RSA_size(key.get());
-                
-                std::string sig(size, 0x00);
-                if(!RSA_public_decrypt(signature.size(), (const unsigned char*)signature.data(), (unsigned char*)sig.data(), key.get(), RSA_NO_PADDING))
-                    throw signature_verification_exception("Invalid signature");
-                
-                if(!RSA_verify_PKCS1_PSS_mgf1(key.get(), (const unsigned char*)hash.data(), md(), md(), (const unsigned char*)sig.data(), -1))
-                    throw signature_verification_exception("Invalid signature");
+                ret = mbedtls_pk_parse_public_key(&pk, m_publicKey.data(), m_publicKey.size());
+                if (ret != ErrorStatus_t::SUCCESS) 
+                {
+                    tr_warn("PSS-RSA failed to parse public key (-0x%04x)", ret);
+                    ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
+                }
+                else
+                {
+                    // Can assert on key type here for extra safety check.
+                    mbedtls_pk_type_t t_pk = MBEDTLS_PK_NONE;
+                    t_pk = mbedtls_pk_get_type(&pk);
+                    
+                    if (t_pk != MBEDTLS_PK_RSA) 
+                    {
+                        tr_error("PSS-RSA Failed. Incorrect key type detected.");
+                        ec = make_error_code(ErrorStatus_t::INCORRECT_KEY_TYPE_ERROR);
+                    }
+                    else
+                    { 
+                        // Calculate the message digest (i.e. hash) for the data.
+                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        char *md = malloc(mdinfo->size);
+                        ret = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        
+                        if (ret != ErrorStatus_t::SUCCESS) 
+                        {
+                            tr_error("PSS-RSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
+                            ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                        }
+                        else
+                        {
+                            // Now verify the signature for the given hash of the data.
+                            ret = mbedtls_pk_verify(&pk, 
+                                                    mdinfo->type, md, mdinfo->size,
+                                                    (const unsigned char*)signature.data(), 
+                                                    signature.size());
+
+                            if (ret != ErrorStatus_t::SUCCESS) 
+                            {
+                                tr_error("PSS-RSA failed to verify message (-0x%04x)", ret);
+                                ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                            }
+                            else
+                            {
+                                tr_debug("PSS-RSA: Signature valid");
+                            }
+                        }
+                        free(md);
+                    }
+                }
+                mbedtls_pk_free(&pk);
             }
             /**
              * Returns the algorithm name provided to the constructor
              * \return Algorithmname
              */
-            std::string name() const {
-                return alg_name;
+            std::string name() const
+            {
+                return m_algorithmName;
             }
         private:
-            /**
-             * Hash the provided data using the hash function specified in constructor
-             * \param data Data to hash
-             * \return Hash of data
-             */
-            std::string generate_hash(const std::string& data) const {
-#ifdef OPENSSL10
-                std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_destroy)> ctx(EVP_MD_CTX_create(), &EVP_MD_CTX_destroy);
-#else
-                std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> ctx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
-#endif
-                if(EVP_DigestInit(ctx.get(), md()) == 0)
-                    throw signature_generation_exception("EVP_DigestInit failed");
-                if(EVP_DigestUpdate(ctx.get(), data.data(), data.size()) == 0)
-                    throw signature_generation_exception("EVP_DigestUpdate failed");
-                unsigned int len = 0;
-                std::string res;
-                res.resize(EVP_MD_CTX_size(ctx.get()));
-                if(EVP_DigestFinal(ctx.get(), (unsigned char*)res.data(), &len) == 0)
-                    throw signature_generation_exception("EVP_DigestFinal failed");
-                res.resize(len);
-                return res;
-            }
-            
-            /// OpenSSL structure containing keys
-            std::shared_ptr<EVP_PKEY> pkey;
-            /// Hash generator function
-            const EVP_MD*(*md)();
-            /// Algorithmname
-            const std::string alg_name;
+            const std::string                 m_publicKey;
+            const std::string                 m_privateKey; 
+            const std::optional<std::string   m_publicKeyPassword; 
+            const std::optional<std::string>  m_privateKeyPassword;
+            const mbedtls_md_type_t           m_messageDigestAlgorithm; /// Hash generator 
+            const std::string                 m_algorithmName;          /// Algorithmname
         };
 
         /**
@@ -1751,7 +1920,7 @@ namespace jwt
          * \return Final token as a string
          */
         template<typename T>
-        std::string sign(const T& algo)
+        std::string sign(const T& algo, std::error_code& errorCode)
         {
             this->set_algorithm(algo.name());
 
@@ -1779,7 +1948,7 @@ namespace jwt
 
             std::string token = header + "." + payload;
 
-            return token + "." + encode(algo.sign(token));
+            return token + "." + encode(algo.sign(token, errorCode));
         }
     };
 
@@ -1792,16 +1961,16 @@ namespace jwt
         struct algo_base
         {
             virtual ~algo_base() = default;
-            virtual void verify(const std::string& data, const std::string& sig) = 0;
+            virtual void verify(const std::string& data, const std::string& sig, std::error_code& errorCode) = 0;
         };
         template<typename T>
         struct algo : public algo_base
         {
             T alg;
             explicit algo(T a) : alg(a) {}
-            virtual void verify(const std::string& data, const std::string& sig) override
+            virtual void verify(const std::string& data, const std::string& sig, std::error_code& errorCode) override
             {
-                alg.verify(data, sig);
+                alg.verify(data, sig, errorCode);
             }
         };
 
@@ -1940,7 +2109,7 @@ namespace jwt
                 errCode = make_error_code(ErrorStatus_t::TOKEN_VERIFICATION_ERROR);
                 return;
             }
-            algs.at(algo)->verify(data, sig);
+            algs.at(algo)->verify(data, sig, errCode);
 
             auto assert_claim_eq = [](const decoded_jwt& jwt, 
                                       const std::string& key, 
@@ -2224,8 +2393,8 @@ namespace jwt
      * \throws std::invalid_argument Token is not in correct format
      * \throws std::runtime_error Base64 decoding failed or invalid json
      */
-    inline decoded_jwt decode(const std::string& token)
+    inline decoded_jwt decode(const std::string& token, std::error_code& errorCode)
     {
-        return decoded_jwt(token);
+        return decoded_jwt(token, errorCode);
     }
 }
