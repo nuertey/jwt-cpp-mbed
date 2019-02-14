@@ -1,0 +1,24 @@
+{
+    "macros": ["MBED_SYS_STATS_ENABLED=1", 
+               "MBED_HEAP_STATS_ENABLED=1"
+           ],
+    
+    "config": {
+        "network-interface":{
+            "help": "options are ETHERNET, WIFI_ESP8266, WIFI_ODIN, WIFI_RTW, MESH_LOWPAN_ND, MESH_THREAD, CELLULAR_ONBOARD",
+            "value": "ETHERNET"
+        }
+    },
+    "target_overrides": {
+        "*": {
+            "target.features_add": ["NANOSTACK", "LOWPAN_ROUTER", "COMMON_PAL"],
+            "platform.stdio-baud-rate": 9600,
+            "platform.stdio-convert-newlines": true,
+            "platform.stdio-buffered-serial": true,
+        "rtos.main-thread-stack-size": 8192,
+            "events.shared-stacksize": 8192,
+            "events.shared-eventsize": 2048,
+            "mbed-trace.enable": 1
+        }
+    }
+}
