@@ -26,7 +26,8 @@
 
 #define PICOJSON_NO_EXCEPTIONS
 #define PICOJSON_USE_INT64
-#define TRACE_GROUP "jwt"
+
+#define TRACE_GROUP "jwt-cpp-mbed"
 
 #include "picojson.h"
 #include "base.h"
@@ -1149,8 +1150,7 @@ namespace jwt
                 ec = make_error_code(ErrorStatus_t::BAD_CAST_ARRAY_ERROR);
                 tr_error("%s :-> std::bad_cast error : %s", 
                           ec.category().name(), ec.message().c_str());
-                std::string emptyString("");
-                return picojson::array(emptyString.cbegin(), emptyString.cend());
+                return picojson::array();
             }
             return val.get<picojson::array>();
         }

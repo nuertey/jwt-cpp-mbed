@@ -2,6 +2,7 @@
 #include "unity.h"
 #include "utest.h"
 #include "jwt-mbed.h"
+#include <cstring>
 
 namespace 
 {
@@ -21,27 +22,38 @@ using namespace utest::v1;
 void Base64Decode() 
 {
     {
-        std::error_code ec;
-        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MQ==", ec);
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        std::error_code errorCode;
+        std::error_code expected;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MQ==", errorCode);
+        
+        //printf("\n[expected outcome] %s :-> \"%s\"\n", 
+               //expected.category().name(), expected.message().c_str());
+        //printf("[actual errorCode] %s :-> \"%s\"\n", 
+               //errorCode.category().name(), errorCode.message().c_str());
+        //printf("[decoded.c_str] :-> \"%s\"\n", decoded.c_str());
+        
+        TEST_ASSERT_EQUAL_STRING(expected.message().c_str(), errorCode.message().c_str());
         TEST_ASSERT_EQUAL_STRING("1", decoded.c_str());
     }
     {
-        std::error_code ec;
-        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MTI=", ec);
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        std::error_code errorCode;
+        std::error_code expected;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MTI=", errorCode);
+        TEST_ASSERT_EQUAL_STRING(expected.message().c_str(), errorCode.message().c_str());
         TEST_ASSERT_EQUAL_STRING("12", decoded.c_str());
     }
     {
-        std::error_code ec;
-        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MTIz", ec);
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        std::error_code errorCode;
+        std::error_code expected;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MTIz", errorCode);
+        TEST_ASSERT_EQUAL_STRING(expected.message().c_str(), errorCode.message().c_str());
         TEST_ASSERT_EQUAL_STRING("123", decoded.c_str());
     }
     {
-        std::error_code ec;
-        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MTIzNA==", ec);
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        std::error_code errorCode;
+        std::error_code expected;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MTIzNA==", errorCode);
+        TEST_ASSERT_EQUAL_STRING(expected.message().c_str(), errorCode.message().c_str());
         TEST_ASSERT_EQUAL_STRING("1234", decoded.c_str());
     }
 }
@@ -49,27 +61,31 @@ void Base64Decode()
 void Base64DecodeURL() 
 {
     {
-        std::error_code ec;
-        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MQ%3d%3d", ec);
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        std::error_code errorCode;
+        std::error_code expected;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MQ%3d%3d", errorCode);
+        TEST_ASSERT_EQUAL_STRING(expected.message().c_str(), errorCode.message().c_str());
         TEST_ASSERT_EQUAL_STRING("1", decoded.c_str());
     }
     {
-        std::error_code ec;
-        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MTI%3d", ec);
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        std::error_code errorCode;
+        std::error_code expected;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MTI%3d", errorCode);
+        TEST_ASSERT_EQUAL_STRING(expected.message().c_str(), errorCode.message().c_str());
         TEST_ASSERT_EQUAL_STRING("12", decoded.c_str());
     }
     {
-        std::error_code ec;
-        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MTIz", ec);
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        std::error_code errorCode;
+        std::error_code expected;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MTIz", errorCode);
+        TEST_ASSERT_EQUAL_STRING(expected.message().c_str(), errorCode.message().c_str());
         TEST_ASSERT_EQUAL_STRING("123", decoded.c_str());
     }
     {
-        std::error_code ec;
-        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MTIzNA%3d%3d", ec);
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        std::error_code errorCode;
+        std::error_code expected;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MTIzNA%3d%3d", errorCode);
+        TEST_ASSERT_EQUAL_STRING(expected.message().c_str(), errorCode.message().c_str());
         TEST_ASSERT_EQUAL_STRING("1234", decoded.c_str());
     }
 }
@@ -93,42 +109,47 @@ void Base64EncodeURL()
 void MissingDot() 
 {
     {
-        std::error_code ec;
-        jwt::decode("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0.eyJpc3MiOiJhdXRoMCJ9", ec);
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec);
-        printf("%s :-> \"%s\"\n", ec.category().name(), ec.message().c_str());
+        std::error_code errorCode;
+        std::error_code expected;
+        jwt::decode("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0.eyJpc3MiOiJhdXRoMCJ9", errorCode);
+        TEST_ASSERT_NOT_EQUAL(0, strcmp(expected.message().c_str(), errorCode.message().c_str()));
+        printf("\n%s :-> \"%s\"\n", errorCode.category().name(), errorCode.message().c_str());
     }
     {
-        std::error_code ec;
-        jwt::decode("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0eyJpc3MiOiJhdXRoMCJ9.", ec);
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec);
-        printf("%s :-> \"%s\"\n", ec.category().name(), ec.message().c_str());
+        std::error_code errorCode;
+        std::error_code expected;
+        jwt::decode("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0eyJpc3MiOiJhdXRoMCJ9.", errorCode);
+        TEST_ASSERT_NOT_EQUAL(0, strcmp(expected.message().c_str(), errorCode.message().c_str()));
+        printf("%s :-> \"%s\"\n", errorCode.category().name(), errorCode.message().c_str());
     }
 }
 
 void InvalidChar() 
 {
-    std::error_code ec;
-    jwt::decode("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0().eyJpc3MiOiJhdXRoMCJ9.", ec);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec);
-    printf("%s :-> \"%s\"\n", ec.category().name(), ec.message().c_str());
+    std::error_code errorCode;
+    std::error_code expected;
+    jwt::decode("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0().eyJpc3MiOiJhdXRoMCJ9.", errorCode);
+    TEST_ASSERT_NOT_EQUAL(0, strcmp(expected.message().c_str(), errorCode.message().c_str()));
+    printf("%s :-> \"%s\"\n", errorCode.category().name(), errorCode.message().c_str());
 }
 
 void InvalidJSON() 
 {
-    std::error_code ec;
-    jwt::decode("YXsiYWxnIjoibm9uZSIsInR5cCI6IkpXUyJ9YQ.eyJpc3MiOiJhdXRoMCJ9.", ec);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec);
-    printf("%s :-> \"%s\"\n", ec.category().name(), ec.message().c_str());
+    std::error_code errorCode;
+    std::error_code expected;
+    jwt::decode("YXsiYWxnIjoibm9uZSIsInR5cCI6IkpXUyJ9YQ.eyJpc3MiOiJhdXRoMCJ9.", errorCode);
+    TEST_ASSERT_NOT_EQUAL(0, strcmp(expected.message().c_str(), errorCode.message().c_str()));
+    printf("%s :-> \"%s\"\n", errorCode.category().name(), errorCode.message().c_str());
 }
 
 void DecodeToken() 
 {
     std::string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.AbIJTDMFc7yUa5MhvcP03nJPyCPzZtQcGEp-zWfOkEE";
     
-    std::error_code ec;
-    auto decoded = jwt::decode(token, ec);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+    std::error_code errorCode;
+    std::error_code expected;
+    auto decoded = jwt::decode(token, errorCode);
+    TEST_ASSERT_EQUAL_STRING(expected.message().c_str(), errorCode.message().c_str());
 
     TEST_ASSERT_TRUE(decoded.has_algorithm());
     TEST_ASSERT_TRUE(decoded.has_type());
@@ -143,55 +164,64 @@ void DecodeToken()
     TEST_ASSERT_FALSE(decoded.has_id());
 
     {
-        std::error_code ec1;
-        auto algorithm = decoded.get_algorithm(ec1);
+        std::error_code expect;
+        std::error_code actual;
+        auto algorithm = decoded.get_algorithm(actual);
+        TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
         TEST_ASSERT_EQUAL_STRING("HS256", algorithm.c_str());
     }
     {
-        std::error_code ec1;
-        auto type = decoded.get_type(ec1);
+        std::error_code expect;
+        std::error_code actual;
+        auto type = decoded.get_type(actual);
+        TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
         TEST_ASSERT_EQUAL_STRING("JWS", type.c_str());
     }
     {
-        std::error_code ec1;
-        auto issuer = decoded.get_issuer(ec1);
+        std::error_code expect;
+        std::error_code actual;
+        auto issuer = decoded.get_issuer(actual);
+        TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
         TEST_ASSERT_EQUAL_STRING("auth0", issuer.c_str());
     }
 }
 
 void CreateToken() 
 {
-    std::error_code ec;
+    std::error_code expect;
+    std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
         .set_type("JWS")
-        .sign(jwt::algorithm::none{}, ec);
+        .sign(jwt::algorithm::none{}, actual);
 
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
     TEST_ASSERT_EQUAL_STRING("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0.eyJpc3MiOiJhdXRoMCJ9.", token.c_str());
 }
 
 void CreateTokenHS256() 
 {
-    std::error_code ec;
+    std::error_code expect;
+    std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
         .set_type("JWS")
-        .sign(jwt::algorithm::hs256{"secret"}, ec);
+        .sign(jwt::algorithm::hs256{"secret"}, actual);
 
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
     TEST_ASSERT_EQUAL_STRING("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.AbIJTDMFc7yUa5MhvcP03nJPyCPzZtQcGEp-zWfOkEE", token.c_str());
 }
 
 void CreateTokenRS256() 
 {
-    std::error_code ec;
+    std::error_code expect;
+    std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
         .set_type("JWS")
-        .sign(jwt::algorithm::rs256(rsa_pub_key, rsa_priv_key, "", ""), ec);
+        .sign(jwt::algorithm::rs256(rsa_pub_key, rsa_priv_key, "", ""), actual);
 
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
     TEST_ASSERT_EQUAL_STRING(
         "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.VA2i1ui1cnoD6I3wnji1WAVCf29EekysvevGrT2GXqK1dDMc8"
         "HAZCTQxa1Q8NppnpYV-hlqxh-X3Bb0JOePTGzjynpNZoJh2aHZD-GKpZt7OO1Zp8AFWPZ3p8Cahq8536fD8RiBES9jRsvChZvOqA7gMcFc4"
@@ -201,13 +231,14 @@ void CreateTokenRS256()
 
 void CreateTokenRS512() 
 {
-    std::error_code ec;
+    std::error_code expect;
+    std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
         .set_type("JWS")
-        .sign(jwt::algorithm::rs512(rsa512_pub_key, rsa512_priv_key, "", ""), ec);
+        .sign(jwt::algorithm::rs512(rsa512_pub_key, rsa512_priv_key, "", ""), actual);
 
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
     TEST_ASSERT_EQUAL_STRING(
         "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.GZhnjtsvBl2_KDSxg4JW6xnmNjr2mWhYSZSSQyLKvI0"
         "TK86sJKchkt_HDy2IC5l5BGRhq_Xv9pHdA1umidQZG3a7gWvHsujqybCBgBraMTd1wJrCl4QxFg2RYHhHbRqb9BnPJgFD_vryd4GB"
@@ -216,39 +247,42 @@ void CreateTokenRS512()
 
 void CreateTokenPS256() 
 {
-    std::error_code ec;
+    std::error_code expect;
+    std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
         .set_type("JWS")
-        .sign(jwt::algorithm::ps256(rsa_pub_key, rsa_priv_key, "", ""), ec);
+        .sign(jwt::algorithm::ps256(rsa_pub_key, rsa_priv_key, "", ""), actual);
 
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
     // TODO: Find a better way to check if generated signature is valid
     // Can't do simple check for equal since pss adds random salt.
 }
 
 void CreateTokenPS384() 
 {
-    std::error_code ec;
+    std::error_code expect;
+    std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
         .set_type("JWS")
-        .sign(jwt::algorithm::ps384(rsa_pub_key, rsa_priv_key, "", ""), ec);
+        .sign(jwt::algorithm::ps384(rsa_pub_key, rsa_priv_key, "", ""), actual);
 
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
     // TODO: Find a better way to check if generated signature is valid
     // Can't do simple check for equal since pss adds random salt.
 }
 
 void CreateTokenPS512() 
 {
-    std::error_code ec;
+    std::error_code expect;
+    std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
         .set_type("JWS")
-        .sign(jwt::algorithm::ps512(rsa_pub_key, rsa_priv_key, "", ""), ec);
+        .sign(jwt::algorithm::ps512(rsa_pub_key, rsa_priv_key, "", ""), actual);
 
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
     // TODO: Find a better way to check if generated signature is valid
     // Can't do simple check for equal since pss adds random salt.
 }
