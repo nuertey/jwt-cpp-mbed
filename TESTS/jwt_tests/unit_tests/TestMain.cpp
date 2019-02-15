@@ -20,34 +20,74 @@ using namespace utest::v1;
 
 void Base64Decode() 
 {
-    TEST_ASSERT_EQUAL("1", jwt::base::decode<jwt::alphabet::base64>("MQ=="));
-    TEST_ASSERT_EQUAL("12", jwt::base::decode<jwt::alphabet::base64>("MTI="));
-    TEST_ASSERT_EQUAL("123", jwt::base::decode<jwt::alphabet::base64>("MTIz"));
-    TEST_ASSERT_EQUAL("1234", jwt::base::decode<jwt::alphabet::base64>("MTIzNA=="));
+    {
+        std::error_code ec;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MQ==", ec);
+        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        TEST_ASSERT_EQUAL_STRING("1", decoded.c_str());
+    }
+    {
+        std::error_code ec;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MTI=", ec);
+        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        TEST_ASSERT_EQUAL_STRING("12", decoded.c_str());
+    }
+    {
+        std::error_code ec;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MTIz", ec);
+        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        TEST_ASSERT_EQUAL_STRING("123", decoded.c_str());
+    }
+    {
+        std::error_code ec;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64>("MTIzNA==", ec);
+        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        TEST_ASSERT_EQUAL_STRING("1234", decoded.c_str());
+    }
 }
 
 void Base64DecodeURL() 
 {
-    TEST_ASSERT_EQUAL("1", jwt::base::decode<jwt::alphabet::base64url>("MQ%3d%3d"));
-    TEST_ASSERT_EQUAL("12", jwt::base::decode<jwt::alphabet::base64url>("MTI%3d"));
-    TEST_ASSERT_EQUAL("123", jwt::base::decode<jwt::alphabet::base64url>("MTIz"));
-    TEST_ASSERT_EQUAL("1234", jwt::base::decode<jwt::alphabet::base64url>("MTIzNA%3d%3d"));
+    {
+        std::error_code ec;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MQ%3d%3d", ec);
+        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        TEST_ASSERT_EQUAL_STRING("1", decoded.c_str());
+    }
+    {
+        std::error_code ec;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MTI%3d", ec);
+        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        TEST_ASSERT_EQUAL_STRING("12", decoded.c_str());
+    }
+    {
+        std::error_code ec;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MTIz", ec);
+        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        TEST_ASSERT_EQUAL_STRING("123", decoded.c_str());
+    }
+    {
+        std::error_code ec;
+        auto decoded = jwt::base::decode<jwt::alphabet::base64url>("MTIzNA%3d%3d", ec);
+        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
+        TEST_ASSERT_EQUAL_STRING("1234", decoded.c_str());
+    }
 }
 
 void Base64Encode() 
 {
-    TEST_ASSERT_EQUAL("MQ==", jwt::base::encode<jwt::alphabet::base64>("1"));
-    TEST_ASSERT_EQUAL("MTI=", jwt::base::encode<jwt::alphabet::base64>("12"));
-    TEST_ASSERT_EQUAL("MTIz", jwt::base::encode<jwt::alphabet::base64>("123"));
-    TEST_ASSERT_EQUAL("MTIzNA==", jwt::base::encode<jwt::alphabet::base64>("1234"));
+    TEST_ASSERT_EQUAL_STRING("MQ==", jwt::base::encode<jwt::alphabet::base64>("1").c_str());
+    TEST_ASSERT_EQUAL_STRING("MTI=", jwt::base::encode<jwt::alphabet::base64>("12").c_str());
+    TEST_ASSERT_EQUAL_STRING("MTIz", jwt::base::encode<jwt::alphabet::base64>("123").c_str());
+    TEST_ASSERT_EQUAL_STRING("MTIzNA==", jwt::base::encode<jwt::alphabet::base64>("1234").c_str());
 }
 
 void Base64EncodeURL() 
 {
-    TEST_ASSERT_EQUAL("MQ%3d%3d", jwt::base::encode<jwt::alphabet::base64url>("1"));
-    TEST_ASSERT_EQUAL("MTI%3d", jwt::base::encode<jwt::alphabet::base64url>("12"));
-    TEST_ASSERT_EQUAL("MTIz", jwt::base::encode<jwt::alphabet::base64url>("123"));
-    TEST_ASSERT_EQUAL("MTIzNA%3d%3d", jwt::base::encode<jwt::alphabet::base64url>("1234"));
+    TEST_ASSERT_EQUAL_STRING("MQ%3d%3d", jwt::base::encode<jwt::alphabet::base64url>("1").c_str());
+    TEST_ASSERT_EQUAL_STRING("MTI%3d", jwt::base::encode<jwt::alphabet::base64url>("12").c_str());
+    TEST_ASSERT_EQUAL_STRING("MTIz", jwt::base::encode<jwt::alphabet::base64url>("123").c_str());
+    TEST_ASSERT_EQUAL_STRING("MTIzNA%3d%3d", jwt::base::encode<jwt::alphabet::base64url>("1234").c_str());
 }
 
 void MissingDot() 
@@ -105,17 +145,17 @@ void DecodeToken()
     {
         std::error_code ec1;
         auto algorithm = decoded.get_algorithm(ec1);
-        TEST_ASSERT_EQUAL("HS256", algorithm);
+        TEST_ASSERT_EQUAL_STRING("HS256", algorithm.c_str());
     }
     {
         std::error_code ec1;
         auto type = decoded.get_type(ec1);
-        TEST_ASSERT_EQUAL("JWS", type);
+        TEST_ASSERT_EQUAL_STRING("JWS", type.c_str());
     }
     {
         std::error_code ec1;
         auto issuer = decoded.get_issuer(ec1);
-        TEST_ASSERT_EQUAL("auth0", issuer);
+        TEST_ASSERT_EQUAL_STRING("auth0", issuer.c_str());
     }
 }
 
@@ -128,7 +168,7 @@ void CreateToken()
         .sign(jwt::algorithm::none{}, ec);
 
     TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
-    TEST_ASSERT_EQUAL("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0.eyJpc3MiOiJhdXRoMCJ9.", token);
+    TEST_ASSERT_EQUAL_STRING("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0.eyJpc3MiOiJhdXRoMCJ9.", token.c_str());
 }
 
 void CreateTokenHS256() 
@@ -140,7 +180,7 @@ void CreateTokenHS256()
         .sign(jwt::algorithm::hs256{"secret"}, ec);
 
     TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
-    TEST_ASSERT_EQUAL("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.AbIJTDMFc7yUa5MhvcP03nJPyCPzZtQcGEp-zWfOkEE", token);
+    TEST_ASSERT_EQUAL_STRING("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.AbIJTDMFc7yUa5MhvcP03nJPyCPzZtQcGEp-zWfOkEE", token.c_str());
 }
 
 void CreateTokenRS256() 
@@ -152,11 +192,11 @@ void CreateTokenRS256()
         .sign(jwt::algorithm::rs256(rsa_pub_key, rsa_priv_key, "", ""), ec);
 
     TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
-    TEST_ASSERT_EQUAL(
+    TEST_ASSERT_EQUAL_STRING(
         "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.VA2i1ui1cnoD6I3wnji1WAVCf29EekysvevGrT2GXqK1dDMc8"
         "HAZCTQxa1Q8NppnpYV-hlqxh-X3Bb0JOePTGzjynpNZoJh2aHZD-GKpZt7OO1Zp8AFWPZ3p8Cahq8536fD8RiBES9jRsvChZvOqA7gMcFc4"
         "YD0iZhNIcI7a654u5yPYyTlf5kjR97prCf_OXWRn-bYY74zna4p_bP9oWCL4BkaoRcMxi-IR7kmVcCnvbYqyIrKloXP2qPO442RBGqU7Ov9"
-        "sGQxiVqtRHKXZR9RbfvjrErY1KGiCp9M5i2bsUHadZEY44FE2jiOmx-uc2z5c05CCXqVSpfCjWbh9gQ", token);
+        "sGQxiVqtRHKXZR9RbfvjrErY1KGiCp9M5i2bsUHadZEY44FE2jiOmx-uc2z5c05CCXqVSpfCjWbh9gQ", token.c_str());
 }
 
 void CreateTokenRS512() 
@@ -168,10 +208,10 @@ void CreateTokenRS512()
         .sign(jwt::algorithm::rs512(rsa512_pub_key, rsa512_priv_key, "", ""), ec);
 
     TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec);
-    TEST_ASSERT_EQUAL(
+    TEST_ASSERT_EQUAL_STRING(
         "eyJhbGciOiJSUzUxMiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.GZhnjtsvBl2_KDSxg4JW6xnmNjr2mWhYSZSSQyLKvI0"
         "TK86sJKchkt_HDy2IC5l5BGRhq_Xv9pHdA1umidQZG3a7gWvHsujqybCBgBraMTd1wJrCl4QxFg2RYHhHbRqb9BnPJgFD_vryd4GB"
-        "hfGgejPBCBlGrQtqFGFdHHOjNHY", token);
+        "hfGgejPBCBlGrQtqFGFdHHOjNHY", token.c_str());
 }
 
 void CreateTokenPS256() 

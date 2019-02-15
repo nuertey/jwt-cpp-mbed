@@ -68,8 +68,9 @@ namespace jwt
         struct none
         {
             /// Return an empty string
-            std::string sign(const std::string&) const
+            std::string sign(const std::string&, std::error_code& ec) const
             {
+                (void)ec;
                 return "";
             }
             /// Check if the given signature is empty. JWT's with "none" algorithm should not contain a signature.
@@ -2118,7 +2119,13 @@ namespace jwt
         {
             const std::string data = jwt.get_header_base64() + "." + jwt.get_payload_base64();
             const std::string sig = jwt.get_signature();
-            const std::string& algo = jwt.get_algorithm();
+            const std::string& algo = jwt.get_algorithm(errCode);
+            
+            if (errCode)
+            {
+                tr_error("Decoded_jwt could not yield a valid algorithm");
+                return;                    
+            }
             if (algs.count(algo) == 0)
             {
                 tr_error("Wrong algorithm");
@@ -2138,7 +2145,13 @@ namespace jwt
                     errorCode = make_error_code(ErrorStatus_t::TOKEN_VERIFICATION_ERROR);
                     return;
                 }
-                auto& jc = jwt.get_payload_claim(key);
+                auto jc = jwt.get_payload_claim(key, errorCode);
+                if (errorCode)
+                {
+                    tr_error("Decoded_jwt could not yield a valid payload claim");
+                    return;                    
+                }                
+                
                 std::error_code ec1;
                 std::error_code ec2;
                 auto type1 = jc.get_type(ec1);
@@ -2270,7 +2283,13 @@ namespace jwt
                 }
             
                 auto leeway = claims.count("exp") == 1 ? std::chrono::system_clock::to_time_t(claimsDate) : default_leeway;
-                auto exp = jwt.get_expires_at();
+                auto exp = jwt.get_expires_at(errCode);
+                if (errCode)
+                {
+                    tr_error("Decoded_jwt could not yield a valid expires at");
+                    return; 
+                }
+                                
                 if (time > exp + std::chrono::seconds(leeway))
                 {
                     tr_error("Token expired");
@@ -2290,7 +2309,14 @@ namespace jwt
                 }
                 
                 auto leeway = claims.count("iat") == 1 ? std::chrono::system_clock::to_time_t(claimsDate) : default_leeway;
-                auto iat = jwt.get_issued_at();
+                auto iat = jwt.get_issued_at(errCode);
+                
+                if (errCode)
+                {
+                    tr_error("Decoded_jwt could not yield a valid issued at");
+                    return; 
+                }
+                
                 if (time < iat - std::chrono::seconds(leeway))
                 {
                     tr_error("Token expired");
@@ -2310,7 +2336,14 @@ namespace jwt
                 }
                 
                 auto leeway = claims.count("nbf") == 1 ? std::chrono::system_clock::to_time_t(claimsDate) : default_leeway;
-                auto nbf = jwt.get_not_before();
+                auto nbf = jwt.get_not_before(errCode);
+                
+                if (errCode)
+                {
+                    tr_error("Decoded_jwt could not yield a valid not before");
+                    return; 
+                }
+                
                 if (time < nbf - std::chrono::seconds(leeway))
                 {
                     tr_error("Token expired");
@@ -2333,8 +2366,14 @@ namespace jwt
                         return;
                     }
                     
+                    auto aud = jwt.get_audience(errCode);
+                    if (errCode)
+                    {
+                        tr_error("Decoded_jwt could not yield a valid audience");
+                        return; 
+                    }
+                    
                     std::error_code ec;
-                    auto aud = jwt.get_audience();
                     auto expected = c.second.as_set(ec);
                     if (ec)
                     {
