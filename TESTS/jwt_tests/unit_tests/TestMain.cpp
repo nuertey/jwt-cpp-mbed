@@ -102,9 +102,21 @@ void DecodeToken()
     TEST_ASSERT_FALSE(decoded.has_issued_at());
     TEST_ASSERT_FALSE(decoded.has_id());
 
-    TEST_ASSERT_EQUAL("HS256", decoded.get_algorithm());
-    TEST_ASSERT_EQUAL("JWS", decoded.get_type());
-    TEST_ASSERT_EQUAL("auth0", decoded.get_issuer());
+    {
+        std::error_code ec1;
+        auto algorithm = decoded.get_algorithm(ec1);
+        TEST_ASSERT_EQUAL("HS256", algorithm);
+    }
+    {
+        std::error_code ec1;
+        auto type = decoded.get_type(ec1);
+        TEST_ASSERT_EQUAL("JWS", type);
+    }
+    {
+        std::error_code ec1;
+        auto issuer = decoded.get_issuer(ec1);
+        TEST_ASSERT_EQUAL("auth0", issuer);
+    }
 }
 
 void CreateToken() 

@@ -28,6 +28,8 @@
 #ifndef picojson_h
 #define picojson_h
 
+#include "mbedtls/error.h"
+#include "mbed-trace/mbed_trace.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -37,7 +39,9 @@
 #include <iterator>
 #include <limits>
 #include <map>
+#if (!defined(PICOJSON_NO_EXCEPTIONS))
 #include <stdexcept>
+#endif // PICOJSON_NO_EXCEPTIONS)
 #include <string>
 #include <vector>
 #include <utility>
@@ -91,12 +95,18 @@ extern "C" {
 #endif
 
 #ifndef PICOJSON_ASSERT
+#if (!defined(PICOJSON_NO_EXCEPTIONS))
 #define PICOJSON_ASSERT(e)                                                                                                         \
   do {                                                                                                                             \
     if (!(e))                                                                                                                      \
       throw std::runtime_error(#e);                                                                                                \
   } while (0)
-#endif
+#else
+#define PICOJSON_ASSERT(e)                                                                                                         \
+  if (!e)                                                                                                                          \
+    tr_error("picojson runtime error\n");
+#endif // PICOJSON_NO_EXCEPTIONS
+#endif // PICOJSON_ASSERT
 
 #ifdef _MSC_VER
 #define SNPRINTF _snprintf_s
@@ -168,10 +178,19 @@ public:
   value(const value &x);
   value &operator=(const value &x);
 #if PICOJSON_USE_RVALUE_REFERENCE
+#if (!defined(PICOJSON_NO_EXCEPTIONS))
   value(value &&x) PICOJSON_NOEXCEPT;
   value &operator=(value &&x) PICOJSON_NOEXCEPT;
-#endif
+#else
+  value(value &&x);
+  value &operator=(value &&x);
+#endif // PICOJSON_NO_EXCEPTIONS
+#endif // PICOJSON_USE_RVALUE_REFERENCE
+#if (!defined(PICOJSON_NO_EXCEPTIONS))
   void swap(value &x) PICOJSON_NOEXCEPT;
+#else
+  void swap(value &x);
+#endif // PICOJSON_NO_EXCEPTIONS)
   template <typename T> bool is() const;
   template <typename T> const T &get() const;
   template <typename T> T &get();
@@ -245,7 +264,11 @@ inline value::value(double n) : type_(number_type), u_() {
       isnan(n) || isinf(n)
 #endif
           ) {
+#if !defined(PICOJSON_NO_EXCEPTIONS)
     throw std::overflow_error("");
+#else
+    tr_error("picojson overflow error\n");
+#endif // PICOJSON_NO_EXCEPTIONS)
   }
   u_.number_ = n;
 }
@@ -327,6 +350,7 @@ inline value &value::operator=(const value &x) {
   return *this;
 }
 
+#if (!defined(PICOJSON_NO_EXCEPTIONS))
 #if PICOJSON_USE_RVALUE_REFERENCE
 inline value::value(value &&x) PICOJSON_NOEXCEPT : type_(null_type), u_() {
   swap(x);
@@ -335,11 +359,26 @@ inline value &value::operator=(value &&x) PICOJSON_NOEXCEPT {
   swap(x);
   return *this;
 }
-#endif
+#endif // PICOJSON_USE_RVALUE_REFERENCE
 inline void value::swap(value &x) PICOJSON_NOEXCEPT {
   std::swap(type_, x.type_);
   std::swap(u_, x.u_);
 }
+#else // PICOJSON_NO_EXCEPTIONS
+#if PICOJSON_USE_RVALUE_REFERENCE
+inline value::value(value &&x) : type_(null_type), u_() {
+  swap(x);
+}
+inline value &value::operator=(value &&x) {
+  swap(x);
+  return *this;
+}
+#endif // PICOJSON_USE_RVALUE_REFERENCE
+inline void value::swap(value &x) {
+  std::swap(type_, x.type_);
+  std::swap(u_, x.u_);
+}
+#endif // PICOJSON_NO_EXCEPTIONS
 
 #define IS(ctype, jtype)                                                                                                           \
   template <> inline bool value::is<ctype>() const {                                                                               \

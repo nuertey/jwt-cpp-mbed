@@ -24,6 +24,7 @@
 ************************************************************************/
 #pragma once
 
+#define PICOJSON_NO_EXCEPTIONS
 #define PICOJSON_USE_INT64
 #define TRACE_GROUP "jwt"
 
@@ -1065,11 +1066,11 @@ namespace jwt
             : val(std::move(s))
         {}
         claim(const date& s)
-            //: val(int64_t(std::chrono::system_clock::to_time_t(s)))
+            : val(int64_t(std::chrono::system_clock::to_time_t(s)))
         {
-            auto timestamp = s;
-            auto value = timestamp.time_since_epoch();
-            val = reinterpret_cast<int64_t>(value.count());
+            //auto timestamp = s;
+            //auto value = timestamp.time_since_epoch();
+            //val = reinterpret_cast<int64_t>(value.count());
         }
         claim(const std::set<std::string>& s)
             : val(picojson::array(s.cbegin(), s.cend()))
@@ -1078,7 +1079,6 @@ namespace jwt
             : val(val)
         {}
 #endif
-
         /**
          * Get wrapped json object
          * \return Wrapped json object
