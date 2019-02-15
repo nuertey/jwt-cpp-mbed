@@ -19,8 +19,8 @@ enum class ErrorStatus_t : int
     INCORRECT_KEY_TYPE_ERROR                   =   -13,
     SIGNATURE_VERIFICATION_ERROR               =   -20,
     SIGNATURE_GENERATION_ERROR                 =   -21,
-    RSA_ERROR                                  =   -22,
-    ECDSA_ERROR                                =   -23,
+    RSA_HASH_CALCULATION_ERROR                 =   -22,
+    ECDSA_HASH_CALCULATION_ERROR               =   -23,
     TOKEN_VERIFICATION_ERROR                   =   -24,
     INTERNAL_LOGIC_ERROR                       =   -30,
     BAD_CAST_STRING_ERROR                      =   -31,
@@ -81,11 +81,11 @@ inline std::string JWTErrorCategory::message(int ev) const
         case ErrorStatus_t::SIGNATURE_GENERATION_ERROR:
             return "signature generation failed";
             
-        case ErrorStatus_t::RSA_ERROR:
-            return "Generic RSA Error";
+        case ErrorStatus_t::RSA_HASH_CALCULATION_ERROR:
+            return "RSA message digest (i.e. hash) calculation error";
 
-        case ErrorStatus_t::ECDSA_ERROR:
-            return "Generic ECDSA Error";
+        case ErrorStatus_t::ECDSA_HASH_CALCULATION_ERROR:
+            return "ECDSA message digest (i.e. hash) calculation error";
 
         case ErrorStatus_t::TOKEN_VERIFICATION_ERROR:
             return "token verification failed";

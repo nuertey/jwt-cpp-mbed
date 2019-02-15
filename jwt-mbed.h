@@ -217,7 +217,7 @@ namespace jwt
             {
                 int rc = 0;
                 size_t sig_len;
-                char * buffer;
+                char buffer[MBEDTLS_MPI_MAX_SIZE] = {};
 
                 // A generic layer is provided to access the RSA / ECDSA
                 // functions in the form of the PK (Public Key) layer.
@@ -229,96 +229,95 @@ namespace jwt
                 // Parse key
                 if (!m_privateKeyPassword)
                 {
+                    tr_debug("RSA is about to parse private key without password");
                     rc = mbedtls_pk_parse_key(&pk, (const unsigned char *)m_privateKey.data(), 
-                                          m_privateKey.size(), nullptr, 0);
+                                          m_privateKey.size() + 1, nullptr, 0);
                 }
                 else
                 {
+                    tr_debug("RSA is about to parse private key with a password");
                     rc = mbedtls_pk_parse_key(&pk, (const unsigned char *)m_privateKey.data(), 
-                                          m_privateKey.size(), 
+                                          m_privateKey.size() + 1, 
                                           (const unsigned char *)((*m_privateKeyPassword).data()), 
-                                          (*m_privateKeyPassword).size());                
+                                          (*m_privateKeyPassword).size() + 1);                
                 }
                 if (rc != 0) 
                 {
-                    tr_warn("RSA failed to parse private key (-0x%04x)", rc);
+                    tr_warn("RSA failed to parse private key [%d]", rc);
                     ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
+                    mbedtls_pk_free(&pk);
+                    return "";
+                }
+
+                tr_debug("RSA parsed private key successfully");
+                // Can assert on key type here for extra safety check.
+                mbedtls_pk_type_t t_pk = MBEDTLS_PK_NONE;
+                t_pk = mbedtls_pk_get_type(&pk);
+                
+                if (t_pk != MBEDTLS_PK_RSA) 
+                {
+                    tr_error("RSA Failed. Incorrect key type detected.");
+                    ec = make_error_code(ErrorStatus_t::INCORRECT_KEY_TYPE_ERROR);
                 }
                 else
-                {
-                    // Can assert on key type here for extra safety check.
-                    mbedtls_pk_type_t t_pk = MBEDTLS_PK_NONE;
-                    t_pk = mbedtls_pk_get_type(&pk);
-                    
-                    if (t_pk != MBEDTLS_PK_RSA) 
-                    {
-                        tr_error("RSA Failed. Incorrect key type detected.");
-                        ec = make_error_code(ErrorStatus_t::INCORRECT_KEY_TYPE_ERROR);
-                    }
-                    else
-                    {  
-                        // Set up CTR-DRBG
-                        const char *pers = "mbedtls_pk_sign";
-                        mbedtls_ctr_drbg_context ctr_drbg;
-                        mbedtls_ctr_drbg_init(&ctr_drbg);
+                {  
+                    tr_debug("RSA detected correct key type successfully");
+                    // Set up CTR-DRBG
+                    const char *pers = "mbedtls_pk_sign";
+                    mbedtls_ctr_drbg_context ctr_drbg;
+                    mbedtls_ctr_drbg_init(&ctr_drbg);
 
-                        // Set up entropy
-                        mbedtls_entropy_context entropy;
-                        mbedtls_entropy_init(&entropy);
-                        rc = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
-                                (const unsigned char *)pers, strlen(pers));
-                        mbedtls_entropy_free(&entropy);
-                        
-                        if (rc != 0) 
-                        {
-                            tr_err("Failed in mbed_tls_ctr_drbg_seed().");
-                            mbedtls_ctr_drbg_free(&ctr_drbg);
-                            mbedtls_pk_free(&pk);
-                            ec = make_error_code(ErrorStatus_t::ENTROPY_SOURCE_FAILED);
-                            return "";
-                        }
-                        
-                        // Calculate the message digest (i.e. hash) for the data.
-                        const mbedtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                        unsigned char *md = (unsigned char *)calloc(mdinfo->size, sizeof(char));
-                        rc = mbedtls_md(mdinfo, (const unsigned char*)data.data(), data.size(), md);
-                        
-                        if (rc != 0) 
-                        {
-                            tr_error("RSA failed to calculate hash (-0x%04x)", rc);
-                            free(md);
-                            mbedtls_ctr_drbg_free(&ctr_drbg);
-                            mbedtls_pk_free(&pk);
-                            ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
-                            return "";
-                        }
-                        else
-                        {
-                            buffer = new char[MBEDTLS_MPI_MAX_SIZE];
-                            // Sign
-                            rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
-                                    mdinfo->size, (unsigned char*)buffer, &sig_len, 
-                                    mbedtls_ctr_drbg_random, &ctr_drbg);
-                        }
+                    // Set up entropy
+                    mbedtls_entropy_context entropy;
+                    mbedtls_entropy_init(&entropy);
+                    rc = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+                            (const unsigned char *)pers, strlen(pers));
+                    mbedtls_entropy_free(&entropy);
+                    
+                    if (rc != 0) 
+                    {
+                        tr_err("Failed in mbed_tls_ctr_drbg_seed().");
+                        mbedtls_ctr_drbg_free(&ctr_drbg);
+                        mbedtls_pk_free(&pk);
+                        ec = make_error_code(ErrorStatus_t::ENTROPY_SOURCE_FAILED);
+                        return "";
+                    }
+                    
+                    // Calculate the message digest (i.e. hash) for the data.
+                    const mbedtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                    unsigned char *md = (unsigned char *)calloc(mdinfo->size, sizeof(char));
+                    rc = mbedtls_md(mdinfo, (const unsigned char*)data.data(), data.size(), md);
+                    
+                    if (rc != 0) 
+                    {
+                        tr_error("RSA failed to calculate hash (-0x%04x)", rc);
                         free(md);
                         mbedtls_ctr_drbg_free(&ctr_drbg);
+                        mbedtls_pk_free(&pk);
+                        ec = make_error_code(ErrorStatus_t::RSA_HASH_CALCULATION_ERROR);
+                        return "";
                     }
+                    else
+                    {
+                        tr_debug("RSA calculated message digest(i.e. hash) successfully");
+                        rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
+                                mdinfo->size, (unsigned char*)buffer, &sig_len, 
+                                mbedtls_ctr_drbg_random, &ctr_drbg);
+                    }
+                    free(md);
+                    mbedtls_ctr_drbg_free(&ctr_drbg);
                 }
+
                 mbedtls_pk_free(&pk);
 
                 if (rc != 0) 
                 {
                     tr_err("RSA : Failed in mbedtls_pk_sign.");
                     ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
-                    if (buffer)
-                    {
-                        delete []buffer;
-                    }
                     return "";
                 }
 
                 std::string res(buffer, sig_len);
-                delete []buffer;
                 return res;
             }
             /**
@@ -334,7 +333,9 @@ namespace jwt
                 mbedtls_pk_context pk;
                 mbedtls_pk_init(&pk);
 
-                ret = mbedtls_pk_parse_public_key(&pk, (const unsigned char *)m_publicKey.data(), m_publicKey.size());
+                ret = mbedtls_pk_parse_public_key(&pk, 
+                      (const unsigned char *)m_publicKey.data(), 
+                      m_publicKey.size() + 1);
                 if (ret != 0) 
                 {
                     tr_warn("RSA failed to parse public key (-0x%04x)", ret);
@@ -361,7 +362,7 @@ namespace jwt
                         if (ret != 0) 
                         {
                             tr_error("RSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
-                            ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                            ec = make_error_code(ErrorStatus_t::RSA_HASH_CALCULATION_ERROR);
                         }
                         else
                         {
@@ -369,7 +370,7 @@ namespace jwt
                             ret = mbedtls_pk_verify(&pk, 
                                                     mdinfo->type, md, mdinfo->size,
                                                     (const unsigned char*)signature.data(), 
-                                                    signature.size());
+                                                    signature.size() + 1);
 
                             if (ret != 0) 
                             {
@@ -511,7 +512,7 @@ namespace jwt
                             free(md);
                             mbedtls_ctr_drbg_free(&ctr_drbg);
                             mbedtls_pk_free(&pk);
-                            ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
+                            ec = make_error_code(ErrorStatus_t::ECDSA_HASH_CALCULATION_ERROR);
                             return "";
                         }
                         else
@@ -585,7 +586,7 @@ namespace jwt
                         if (ret != 0) 
                         {
                             tr_error("ECDSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
-                            ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
+                            ec = make_error_code(ErrorStatus_t::ECDSA_HASH_CALCULATION_ERROR);
                         }
                         else
                         {

@@ -4,6 +4,9 @@
         "main-stack-size": {
             "value": 12288
         },
+        "thread-stack-size": {
+            "value": 12288
+        },
         "network-interface":{
             "help": "options are ETHERNET, WIFI_ESP8266, WIFI_ODIN, WIFI_RTW, MESH_LOWPAN_ND, MESH_THREAD, CELLULAR_ONBOARD",
             "value": "ETHERNET"
