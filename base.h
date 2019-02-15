@@ -4,6 +4,10 @@
 #include <array>
 #include <type_traits>
 #include <system_error>
+#include <cstdlib>
+
+#include "mbedtls/error.h"
+#include "mbed-trace/mbed_trace.h"
 
 enum class ErrorStatus_t : int
 {
@@ -12,7 +16,7 @@ enum class ErrorStatus_t : int
     MEMORY_ALLOCATION_ERROR                    =   -10,
     BUFFER_SIZE_INSUFFICIENT_ERROR             =   -11,
     PARSE_KEY_ERROR                            =   -12,
-    INCORRECT_KEY_TYPE_ERROR                   =   -13
+    INCORRECT_KEY_TYPE_ERROR                   =   -13,
     SIGNATURE_VERIFICATION_ERROR               =   -20,
     SIGNATURE_GENERATION_ERROR                 =   -21,
     RSA_ERROR                                  =   -22,
@@ -28,7 +32,7 @@ enum class ErrorStatus_t : int
     INVALID_TOKEN_ARGUMENT_ERROR               =   -37,
     INVALID_JSON_DETECTED_ERROR                =   -38,
     CLAIM_NOT_FOUND_ERROR                      =   -39,
-    MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED =   -40,
+    ENTROPY_SOURCE_FAILED                      =   -40,
     INVALID_INPUT_RUNTIME_ERROR                =   -41,
 };
 
@@ -44,12 +48,12 @@ struct JWTErrorCategory : std::error_category
     std::string message(int ev) const override;
 };
 
-const char* JWTErrorCategory::name() const noexcept
+inline const char* JWTErrorCategory::name() const noexcept
 {
     return "JWT-Mbed";
 }
 
-std::string JWTErrorCategory::message(int ev) const
+inline std::string JWTErrorCategory::message(int ev) const
 {
     switch (static_cast<ErrorStatus_t>(ev))
     {
@@ -116,7 +120,7 @@ std::string JWTErrorCategory::message(int ev) const
         case ErrorStatus_t::CLAIM_NOT_FOUND_ERROR:
             return "Runtime error. Claim not found error";
             
-        case ErrorStatus_t::MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED:
+        case ErrorStatus_t::ENTROPY_SOURCE_FAILED:
             return "Failed in mbed_tls_ctr_drbg_seed()";
             
         case ErrorStatus_t::INVALID_INPUT_RUNTIME_ERROR:
@@ -127,7 +131,7 @@ std::string JWTErrorCategory::message(int ev) const
 }
 
 template <typename E>
-constexpr auto ToIntegral(E e) -> typename std::underlying_type<E>::type
+inline constexpr auto ToIntegral(E e) -> typename std::underlying_type<E>::type
 {
     return static_cast<typename std::underlying_type<E>::type>(e);
 }
@@ -299,7 +303,7 @@ namespace jwt
                 }
                 tr_error("Invalid input");
                 ec = make_error_code(ErrorStatus_t::INVALID_INPUT_RUNTIME_ERROR);
-                return 0;
+                return (size_t)0;
             };
 
             size_t fast_size = size - size % 4;

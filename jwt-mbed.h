@@ -41,14 +41,13 @@
 // minimize such deviations, use the supplied manual base64 operations
 // instead of the ARM MbedTLS one for now. 
 // TBD, Nuertey Odzeyem; revisit if testing indicates anomalies here.
-//#include "mbedtls/base64.h" 
+#include "mbedtls/base64.h" 
                    
-#include "mbedtls/error.h"
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/md.h"
+#include "mbedtls/md_internal.h"
 #include "mbedtls/pk.h"
-#include "mbed-trace/mbed_trace.h"
 
 #ifndef JWT_CLAIM_EXPLICIT
 #define JWT_CLAIM_EXPLICIT 0
@@ -97,8 +96,8 @@ namespace jwt
              * \param md Pointer to hash function
              * \param name Name of the algorithm
              */
-            hmacsha(std::string key, mbedtls_md_type_t& mdAlgorithm = MBEDTLS_MD_SHA1, 
-                    const std::string& name)
+            hmacsha(std::string key, const mbedtls_md_type_t& mdAlgorithm = MBEDTLS_MD_SHA1, 
+                    const std::string& name = "")
                 : m_secret(std::move(key))
                 , m_messageDigestAlgorithm(mdAlgorithm)
                 , m_algorithmName(name)
@@ -111,18 +110,18 @@ namespace jwt
              */
             std::string sign(const std::string& data, std::error_code& ec) const
             {
-                int rc = ErrorStatus_t::SUCCESS;
+                int rc = 0;
                 std::string res;
                 mbedtls_md_context_t ctx;
 
                 // Reserve and initialize memory for hash.
-                mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                char *md = calloc(mdinfo->size, sizeof(char));
+                const mbedtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                unsigned char *md = (unsigned char *)calloc(mdinfo->size, sizeof(char));
                 
                 // Calculate the message digest (i.e. hash) for the data.
-                rc = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                rc = mbedtls_md(mdinfo, (const unsigned char*)data.data(), data.size(), md);
                 
-                if (rc != ErrorStatus_t::SUCCESS) 
+                if (rc != 0) 
                 {
                     tr_error("HMAC failed to calculate hash (-0x%04x)", rc);
                     ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
@@ -131,10 +130,10 @@ namespace jwt
                 {
                     mbedtls_md_init(&ctx);  
                     mbedtls_md_setup(&ctx, mdinfo, 1); //use hmac
-                    mbedtls_md_hmac_starts(&ctx, m_secret.data(), m_secret.size());
+                    mbedtls_md_hmac_starts(&ctx, (const unsigned char *)m_secret.data(), m_secret.size());
                     mbedtls_md_hmac_update(&ctx, (const unsigned char *)data.data(), data.size());    
                     mbedtls_md_hmac_finish(&ctx, md);
-                    res = std::string(md, mdinfo->size);
+                    res = std::string(reinterpret_cast<const char *>(md), mdinfo->size);
                     mbedtls_md_free(&ctx);    
                 }
                 free(md);
@@ -194,7 +193,7 @@ namespace jwt
              */
             rsa(const std::string& public_key, const std::string& private_key, 
                 const std::string& public_key_password="", const std::string& private_key_password="", 
-                const mbedtls_md_type_t& mdAlgorithm = MBEDTLS_MD_SHA1, const std::string& name)
+                const mbedtls_md_type_t& mdAlgorithm = MBEDTLS_MD_SHA1, const std::string& name = "")
                 : m_publicKey(public_key)
                 , m_privateKey(private_key) 
                 , m_publicKeyPassword(public_key_password.empty() ? 
@@ -213,7 +212,7 @@ namespace jwt
              */
             std::string sign(const std::string& data, std::error_code& ec) const
             {
-                int rc = ErrorStatus_t::SUCCESS;
+                int rc = 0;
                 size_t sig_len;
                 char * buffer;
 
@@ -227,19 +226,19 @@ namespace jwt
                 // Parse key
                 if (!m_privateKeyPassword)
                 {
-                    rc = mbedtls_pk_parse_key(&pk, m_privateKey.data(), 
+                    rc = mbedtls_pk_parse_key(&pk, (const unsigned char *)m_privateKey.data(), 
                                           m_privateKey.size(), nullptr, 0);
                 }
                 else
                 {
-                    rc = mbedtls_pk_parse_key(&pk, m_privateKey.data(), 
+                    rc = mbedtls_pk_parse_key(&pk, (const unsigned char *)m_privateKey.data(), 
                                           m_privateKey.size(), 
-                                          (*m_privateKeyPassword).data(), 
+                                          (const unsigned char *)((*m_privateKeyPassword).data()), 
                                           (*m_privateKeyPassword).size());                
                 }
-                if (rc != ErrorStatus_t::SUCCESS) 
+                if (rc != 0) 
                 {
-                    tr_warn("RSA failed to parse private key (-0x%04x)", ret);
+                    tr_warn("RSA failed to parse private key (-0x%04x)", rc);
                     ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
                 }
                 else
@@ -267,21 +266,21 @@ namespace jwt
                                 (const unsigned char *)pers, strlen(pers));
                         mbedtls_entropy_free(&entropy);
                         
-                        if (rc != ErrorStatus_t::SUCCESS) 
+                        if (rc != 0) 
                         {
                             tr_err("Failed in mbed_tls_ctr_drbg_seed().");
                             mbedtls_ctr_drbg_free(&ctr_drbg);
                             mbedtls_pk_free(&pk);
-                            ec = make_error_code(ErrorStatus_t::MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED);
+                            ec = make_error_code(ErrorStatus_t::ENTROPY_SOURCE_FAILED);
                             return "";
                         }
                         
                         // Calculate the message digest (i.e. hash) for the data.
-                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                        char *md = malloc(mdinfo->size);
-                        rc = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        const mbedtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        unsigned char *md = (unsigned char *)calloc(mdinfo->size, sizeof(char));
+                        rc = mbedtls_md(mdinfo, (const unsigned char*)data.data(), data.size(), md);
                         
-                        if (rc != ErrorStatus_t::SUCCESS) 
+                        if (rc != 0) 
                         {
                             tr_error("RSA failed to calculate hash (-0x%04x)", rc);
                             free(md);
@@ -295,7 +294,7 @@ namespace jwt
                             buffer = new char[MBEDTLS_MPI_MAX_SIZE];
                             // Sign
                             rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
-                                    mdinfo->size, buffer, &sig_len, 
+                                    mdinfo->size, (unsigned char*)buffer, &sig_len, 
                                     mbedtls_ctr_drbg_random, &ctr_drbg);
                         }
                         free(md);
@@ -304,7 +303,7 @@ namespace jwt
                 }
                 mbedtls_pk_free(&pk);
 
-                if (rc != ErrorStatus_t::SUCCESS) 
+                if (rc != 0) 
                 {
                     tr_err("RSA : Failed in mbedtls_pk_sign.");
                     ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
@@ -328,12 +327,12 @@ namespace jwt
             void verify(const std::string& data, const std::string& signature, 
                         std::error_code& ec) const
             {
-                int ret = ErrorStatus_t::SUCCESS;
+                int ret = 0;
                 mbedtls_pk_context pk;
                 mbedtls_pk_init(&pk);
 
-                ret = mbedtls_pk_parse_public_key(&pk, m_publicKey.data(), m_publicKey.size());
-                if (ret != ErrorStatus_t::SUCCESS) 
+                ret = mbedtls_pk_parse_public_key(&pk, (const unsigned char *)m_publicKey.data(), m_publicKey.size());
+                if (ret != 0) 
                 {
                     tr_warn("RSA failed to parse public key (-0x%04x)", ret);
                     ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
@@ -352,11 +351,11 @@ namespace jwt
                     else
                     { 
                         // Calculate the message digest (i.e. hash) for the data.
-                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                        char *md = malloc(mdinfo->size);
-                        ret = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        const mbedtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        unsigned char *md = (unsigned char *)calloc(mdinfo->size, sizeof(char));
+                        ret = mbedtls_md(mdinfo, (const unsigned char*)data.data(), data.size(), md);
                         
-                        if (ret != ErrorStatus_t::SUCCESS) 
+                        if (ret != 0) 
                         {
                             tr_error("RSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
                             ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
@@ -369,7 +368,7 @@ namespace jwt
                                                     (const unsigned char*)signature.data(), 
                                                     signature.size());
 
-                            if (ret != ErrorStatus_t::SUCCESS) 
+                            if (ret != 0) 
                             {
                                 tr_error("RSA failed to verify message (-0x%04x)", ret);
                                 ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
@@ -395,7 +394,7 @@ namespace jwt
         private:
             const std::string                 m_publicKey;
             const std::string                 m_privateKey; 
-            const std::optional<std::string   m_publicKeyPassword; 
+            const std::optional<std::string>  m_publicKeyPassword; 
             const std::optional<std::string>  m_privateKeyPassword;
             const mbedtls_md_type_t           m_messageDigestAlgorithm; /// Hash generator 
             const std::string                 m_algorithmName;          /// Algorithmname
@@ -416,7 +415,7 @@ namespace jwt
              */
             ecdsa(const std::string& public_key, const std::string& private_key, 
                 const std::string& public_key_password="", const std::string& private_key_password="", 
-                const mbedtls_md_type_t& mdAlgorithm = MBEDTLS_MD_SHA1, const std::string& name)
+                const mbedtls_md_type_t& mdAlgorithm = MBEDTLS_MD_SHA1, const std::string& name = "")
                 : m_publicKey(public_key)
                 , m_privateKey(private_key) 
                 , m_publicKeyPassword(public_key_password.empty() ? 
@@ -435,7 +434,7 @@ namespace jwt
              */
             std::string sign(const std::string& data, std::error_code& ec) const
             {
-                int rc = ErrorStatus_t::SUCCESS;
+                int rc = 0;
                 size_t sig_len;
                 char * buffer;
 
@@ -449,19 +448,19 @@ namespace jwt
                 // Parse key
                 if (!m_privateKeyPassword)
                 {
-                    rc = mbedtls_pk_parse_key(&pk, m_privateKey.data(), 
+                    rc = mbedtls_pk_parse_key(&pk, (const unsigned char *)m_privateKey.data(), 
                                           m_privateKey.size(), nullptr, 0);
                 }
                 else
                 {
-                    rc = mbedtls_pk_parse_key(&pk, m_privateKey.data(), 
+                    rc = mbedtls_pk_parse_key(&pk, (const unsigned char *)m_privateKey.data(), 
                                           m_privateKey.size(), 
-                                          (*m_privateKeyPassword).data(), 
+                                          (const unsigned char *)((*m_privateKeyPassword).data()), 
                                           (*m_privateKeyPassword).size());                
                 }
-                if (rc != ErrorStatus_t::SUCCESS) 
+                if (rc != 0) 
                 {
-                    tr_warn("ECDSA failed to parse private key (-0x%04x)", ret);
+                    tr_warn("ECDSA failed to parse private key (-0x%04x)", rc);
                     ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
                 }
                 else
@@ -489,21 +488,21 @@ namespace jwt
                                 (const unsigned char *)pers, strlen(pers));
                         mbedtls_entropy_free(&entropy);
                         
-                        if (rc != ErrorStatus_t::SUCCESS) 
+                        if (rc != 0) 
                         {
                             tr_err("Failed in mbed_tls_ctr_drbg_seed().");
                             mbedtls_ctr_drbg_free(&ctr_drbg);
                             mbedtls_pk_free(&pk);
-                            ec = make_error_code(ErrorStatus_t::MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED);
+                            ec = make_error_code(ErrorStatus_t::ENTROPY_SOURCE_FAILED);
                             return "";
                         }
                         
                         // Calculate the message digest (i.e. hash) for the data.
-                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                        char *md = malloc(mdinfo->size);
-                        rc = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        const mbedtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        unsigned char *md = (unsigned char *)calloc(mdinfo->size, sizeof(char));
+                        rc = mbedtls_md(mdinfo, (const unsigned char *)data.data(), data.size(), md);
                         
-                        if (rc != ErrorStatus_t::SUCCESS) 
+                        if (rc != 0) 
                         {
                             tr_error("ECDSA failed to calculate hash (-0x%04x)", rc);
                             free(md);
@@ -517,7 +516,7 @@ namespace jwt
                             buffer = new char[MBEDTLS_MPI_MAX_SIZE];
                             // Sign
                             rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
-                                    mdinfo->size, buffer, &sig_len, 
+                                    mdinfo->size, (unsigned char*)buffer, &sig_len, 
                                     mbedtls_ctr_drbg_random, &ctr_drbg);
                         }
                         free(md);
@@ -526,7 +525,7 @@ namespace jwt
                 }
                 mbedtls_pk_free(&pk);
 
-                if (rc != ErrorStatus_t::SUCCESS) 
+                if (rc != 0) 
                 {
                     tr_err("ECDSA: Failed in mbedtls_pk_sign.");
                     ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
@@ -550,12 +549,14 @@ namespace jwt
              void verify(const std::string& data, const std::string& signature, 
                         std::error_code& ec) const
             {
-                int ret = ErrorStatus_t::SUCCESS;
+                int ret = 0;
                 mbedtls_pk_context pk;
                 mbedtls_pk_init(&pk);
 
-                ret = mbedtls_pk_parse_public_key(&pk, m_publicKey.data(), m_publicKey.size());
-                if (ret != ErrorStatus_t::SUCCESS) 
+                ret = mbedtls_pk_parse_public_key(&pk, 
+                     (const unsigned char *)m_publicKey.data(), 
+                     m_publicKey.size());
+                if (ret != 0) 
                 {
                     tr_warn("ECDSA failed to parse public key (-0x%04x)", ret);
                     ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
@@ -574,11 +575,11 @@ namespace jwt
                     else
                     { 
                         // Calculate the message digest (i.e. hash) for the data.
-                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                        char *md = malloc(mdinfo->size);
-                        ret = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        const mbedtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        unsigned char *md = (unsigned char *)calloc(mdinfo->size, sizeof(char));
+                        ret = mbedtls_md(mdinfo, (const unsigned char *)data.data(), data.size(), md);
                         
-                        if (ret != ErrorStatus_t::SUCCESS) 
+                        if (ret != 0) 
                         {
                             tr_error("ECDSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
                             ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
@@ -591,7 +592,7 @@ namespace jwt
                                                     (const unsigned char*)signature.data(), 
                                                     signature.size());
 
-                            if (ret != ErrorStatus_t::SUCCESS) 
+                            if (ret != 0) 
                             {
                                 tr_error("ECDSA failed to verify message (-0x%04x)", ret);
                                 ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
@@ -617,7 +618,7 @@ namespace jwt
         private:
             const std::string                 m_publicKey;
             const std::string                 m_privateKey; 
-            const std::optional<std::string   m_publicKeyPassword; 
+            const std::optional<std::string>  m_publicKeyPassword; 
             const std::optional<std::string>  m_privateKeyPassword;
             const mbedtls_md_type_t           m_messageDigestAlgorithm; /// Hash generator 
             const std::string                 m_algorithmName;          /// Algorithmname
@@ -638,7 +639,7 @@ namespace jwt
              */
             pss(const std::string& public_key, const std::string& private_key, 
                 const std::string& public_key_password="", const std::string& private_key_password="", 
-                const mbedtls_md_type_t& mdAlgorithm = MBEDTLS_MD_SHA1, const std::string& name)
+                const mbedtls_md_type_t& mdAlgorithm = MBEDTLS_MD_SHA1, const std::string& name = "")
                 : m_publicKey(public_key)
                 , m_privateKey(private_key) 
                 , m_publicKeyPassword(public_key_password.empty() ? 
@@ -657,7 +658,7 @@ namespace jwt
              */
             std::string sign(const std::string& data, std::error_code& ec) const
             {
-                int rc = ErrorStatus_t::SUCCESS;
+                int rc = 0;
                 size_t sig_len;
                 char * buffer;
 
@@ -671,19 +672,19 @@ namespace jwt
                 // Parse key
                 if (!m_privateKeyPassword)
                 {
-                    rc = mbedtls_pk_parse_key(&pk, m_privateKey.data(), 
+                    rc = mbedtls_pk_parse_key(&pk, (const unsigned char*)m_privateKey.data(), 
                                           m_privateKey.size(), nullptr, 0);
                 }
                 else
                 {
-                    rc = mbedtls_pk_parse_key(&pk, m_privateKey.data(), 
+                    rc = mbedtls_pk_parse_key(&pk, (const unsigned char*)m_privateKey.data(), 
                                           m_privateKey.size(), 
-                                          (*m_privateKeyPassword).data(), 
+                                          (const unsigned char *)((*m_privateKeyPassword).data()), 
                                           (*m_privateKeyPassword).size());                
                 }
-                if (rc != ErrorStatus_t::SUCCESS) 
+                if (rc != 0) 
                 {
-                    tr_warn("PSS-RSA failed to parse private key (-0x%04x)", ret);
+                    tr_warn("PSS-RSA failed to parse private key (-0x%04x)", rc);
                     ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
                 }
                 else
@@ -711,12 +712,12 @@ namespace jwt
                                 (const unsigned char *)pers, strlen(pers));
                         mbedtls_entropy_free(&entropy);
                         
-                        if (rc != ErrorStatus_t::SUCCESS) 
+                        if (rc != 0) 
                         {
                             tr_err("Failed in mbed_tls_ctr_drbg_seed().");
                             mbedtls_ctr_drbg_free(&ctr_drbg);
                             mbedtls_pk_free(&pk);
-                            ec = make_error_code(ErrorStatus_t::MBEDTLS_ERR_CTR_DRBG_ENTROPY_SOURCE_FAILED);
+                            ec = make_error_code(ErrorStatus_t::ENTROPY_SOURCE_FAILED);
                             return "";
                         }
                         mbedtls_rsa_set_padding(mbedtls_pk_rsa(pk), 
@@ -724,11 +725,11 @@ namespace jwt
                                                 m_messageDigestAlgorithm);
 
                         // Calculate the message digest (i.e. hash) for the data.
-                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                        char *md = malloc(mdinfo->size);
-                        rc = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        const mbedtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        unsigned char *md = (unsigned char *)calloc(mdinfo->size, sizeof(char));
+                        rc = mbedtls_md(mdinfo, (const unsigned char*)data.data(), data.size(), md);
                         
-                        if (rc != ErrorStatus_t::SUCCESS) 
+                        if (rc != 0) 
                         {
                             tr_error("PSS-RSA failed to calculate hash (-0x%04x)", rc);
                             free(md);
@@ -742,7 +743,7 @@ namespace jwt
                             buffer = new char[MBEDTLS_MPI_MAX_SIZE];
                             // Sign
                             rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
-                                    mdinfo->size, buffer, &sig_len, 
+                                    mdinfo->size, (unsigned char*)buffer, &sig_len, 
                                     mbedtls_ctr_drbg_random, &ctr_drbg);
                         }
                         free(md);
@@ -751,7 +752,7 @@ namespace jwt
                 }
                 mbedtls_pk_free(&pk);
 
-                if (rc != ErrorStatus_t::SUCCESS) 
+                if (rc != 0) 
                 {
                     tr_err("PSS-RSA: Failed in mbedtls_pk_sign.");
                     ec = make_error_code(ErrorStatus_t::SIGNATURE_GENERATION_ERROR);
@@ -775,12 +776,14 @@ namespace jwt
              void verify(const std::string& data, const std::string& signature, 
                         std::error_code& ec) const
             {
-                int ret = ErrorStatus_t::SUCCESS;
+                int ret = 0;
                 mbedtls_pk_context pk;
                 mbedtls_pk_init(&pk);
 
-                ret = mbedtls_pk_parse_public_key(&pk, m_publicKey.data(), m_publicKey.size());
-                if (ret != ErrorStatus_t::SUCCESS) 
+                ret = mbedtls_pk_parse_public_key(&pk, 
+                      (const unsigned char*)m_publicKey.data(), 
+                      m_publicKey.size());
+                if (ret != 0) 
                 {
                     tr_warn("PSS-RSA failed to parse public key (-0x%04x)", ret);
                     ec = make_error_code(ErrorStatus_t::PARSE_KEY_ERROR);
@@ -799,11 +802,11 @@ namespace jwt
                     else
                     { 
                         // Calculate the message digest (i.e. hash) for the data.
-                        mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
-                        char *md = malloc(mdinfo->size);
-                        ret = mbedtls_md(mdinfo, data.data(), data.size(), md);
+                        const mbedtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
+                        unsigned char *md = (unsigned char *)calloc(mdinfo->size, sizeof(char));
+                        ret = mbedtls_md(mdinfo, (const unsigned char*)data.data(), data.size(), md);
                         
-                        if (ret != ErrorStatus_t::SUCCESS) 
+                        if (ret != 0) 
                         {
                             tr_error("PSS-RSA failed to calculate the message digest (i.e. hash) for the data. (-0x%04x)", ret);
                             ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
@@ -816,7 +819,7 @@ namespace jwt
                                                     (const unsigned char*)signature.data(), 
                                                     signature.size());
 
-                            if (ret != ErrorStatus_t::SUCCESS) 
+                            if (ret != 0) 
                             {
                                 tr_error("PSS-RSA failed to verify message (-0x%04x)", ret);
                                 ec = make_error_code(ErrorStatus_t::SIGNATURE_VERIFICATION_ERROR);
@@ -842,7 +845,7 @@ namespace jwt
         private:
             const std::string                 m_publicKey;
             const std::string                 m_privateKey; 
-            const std::optional<std::string   m_publicKeyPassword; 
+            const std::optional<std::string>  m_publicKeyPassword; 
             const std::optional<std::string>  m_privateKeyPassword;
             const mbedtls_md_type_t           m_messageDigestAlgorithm; /// Hash generator 
             const std::string                 m_algorithmName;          /// Algorithmname
@@ -1043,6 +1046,7 @@ namespace jwt
         claim()
             : val()
         {}
+
 #if JWT_CLAIM_EXPLICIT
         explicit claim(std::string s)
             : val(std::move(s))
@@ -1061,8 +1065,12 @@ namespace jwt
             : val(std::move(s))
         {}
         claim(const date& s)
-            : val(int64_t(std::chrono::system_clock::to_time_t(s)))
-        {}
+            //: val(int64_t(std::chrono::system_clock::to_time_t(s)))
+        {
+            auto timestamp = s;
+            auto value = timestamp.time_since_epoch();
+            val = reinterpret_cast<int64_t>(value.count());
+        }
         claim(const std::set<std::string>& s)
             : val(picojson::array(s.cbegin(), s.cend()))
         {}
@@ -1107,14 +1115,15 @@ namespace jwt
          * \return content as string
          * \throws std::bad_cast Content was not a string
          */
-        const std::string& as_string(std::error_code& ec) const
+        std::string as_string(std::error_code& ec) const
         {
+            std::string temp;
             if (!val.is<std::string>())
             {
                 ec = make_error_code(ErrorStatus_t::BAD_CAST_STRING_ERROR);
                 tr_error("%s :-> std::bad_cast error : %s", 
-                          ec.category().name(), ec.message());
-                return "";
+                          ec.category().name(), ec.message().c_str());
+                return temp;
             }
             return val.get<std::string>();
         }
@@ -1132,13 +1141,13 @@ namespace jwt
          * \return content as array
          * \throws std::bad_cast Content was not an array
          */
-        const picojson::array& as_array(std::error_code& ec) const
+        picojson::array as_array(std::error_code& ec) const
         {
             if (!val.is<picojson::array>())
             {
                 ec = make_error_code(ErrorStatus_t::BAD_CAST_ARRAY_ERROR);
                 tr_error("%s :-> std::bad_cast error : %s", 
-                          ec.category().name(), ec.message());
+                          ec.category().name(), ec.message().c_str());
                 std::string emptyString("");
                 return picojson::array(emptyString.cbegin(), emptyString.cend());
             }
@@ -1149,19 +1158,26 @@ namespace jwt
          * \return content as set of strings
          * \throws std::bad_cast Content was not a set
          */
-        const std::set<std::string> as_set(std::error_code& ec) const
+        std::set<std::string> as_set(std::error_code& ec) const
         {
             std::set<std::string> res;
-            for (auto& e : as_array())
+            for (auto& e : as_array(ec))
             {
-                if (!e.is<std::string>())
+                if (ErrorStatus_t::SUCCESS == ec)
                 {
-                    ec = make_error_code(ErrorStatus_t::BAD_CAST_SET_ERROR);
-                    tr_error("%s :-> std::bad_cast error : %s", 
-                              ec.category().name(), ec.message());
-                    return res;
+                    if (!e.is<std::string>())
+                    {
+                        ec = make_error_code(ErrorStatus_t::BAD_CAST_SET_ERROR);
+                        tr_error("%s :-> std::bad_cast error : %s", 
+                                  ec.category().name(), ec.message().c_str());
+                        return res;
+                    }
+                    res.insert(e.get<std::string>());
                 }
-                res.insert(e.get<std::string>());
+                else
+                {
+                    break;
+                }
             }
             return res;
         }
@@ -1176,7 +1192,7 @@ namespace jwt
             {
                 ec = make_error_code(ErrorStatus_t::BAD_CAST_INT_ERROR);
                 tr_error("%s :-> std::bad_cast error : %s", 
-                          ec.category().name(), ec.message());
+                          ec.category().name(), ec.message().c_str());
                 return 0;
             }
             return val.get<int64_t>();
@@ -1192,7 +1208,7 @@ namespace jwt
             {
                 ec = make_error_code(ErrorStatus_t::BAD_CAST_BOOL_ERROR);
                 tr_error("%s :-> std::bad_cast error : %s", 
-                          ec.category().name(), ec.message());
+                          ec.category().name(), ec.message().c_str());
                 return false;
             }
             return val.get<bool>();
@@ -1208,7 +1224,7 @@ namespace jwt
             {
                 ec = make_error_code(ErrorStatus_t::BAD_CAST_NUMBER_ERROR);
                 tr_error("%s :-> std::bad_cast error : %s", 
-                          ec.category().name(), ec.message());
+                          ec.category().name(), ec.message().c_str());
                 return 0.0;
             }
             return val.get<double>();
@@ -1286,7 +1302,7 @@ namespace jwt
          * \throws std::runtime_error If claim was not present
          * \throws std::bad_cast Claim was present but not a string (Should not happen in a valid token)
          */
-        const std::string& get_issuer(std::error_code& ec) const
+        std::string get_issuer(std::error_code& ec) const
         {
             auto claimN = get_payload_claim("iss", ec);
             if (!ec)
@@ -1304,7 +1320,7 @@ namespace jwt
          * \throws std::runtime_error If claim was not present
          * \throws std::bad_cast Claim was present but not a string (Should not happen in a valid token)
          */
-        const std::string& get_subject(std::error_code& ec) const
+        std::string get_subject(std::error_code& ec) const
         {
             auto claimN = get_payload_claim("sub", ec);
             if (!ec)
@@ -1340,7 +1356,7 @@ namespace jwt
          * \throws std::runtime_error If claim was not present
          * \throws std::bad_cast Claim was present but not a date (Should not happen in a valid token)
          */
-        const date get_expires_at(std::error_code& ec) const
+        date get_expires_at(std::error_code& ec) const
         {
             auto claimN = get_payload_claim("exp", ec);
             if (!ec)
@@ -1358,7 +1374,7 @@ namespace jwt
          * \throws std::runtime_error If claim was not present
          * \throws std::bad_cast Claim was present but not a date (Should not happen in a valid token)
          */
-        const date get_not_before(std::error_code& ec) const
+        date get_not_before(std::error_code& ec) const
         {
             auto claimN = get_payload_claim("nbf", ec);
             if (!ec)
@@ -1376,7 +1392,7 @@ namespace jwt
          * \throws std::runtime_error If claim was not present
          * \throws std::bad_cast Claim was present but not a date (Should not happen in a valid token)
          */
-        const date get_issued_at(std::error_code& ec) const
+        date get_issued_at(std::error_code& ec) const
         {
             auto claimN = get_payload_claim("iat", ec);
             if (!ec)
@@ -1394,7 +1410,7 @@ namespace jwt
          * \throws std::runtime_error If claim was not present
          * \throws std::bad_cast Claim was present but not a string (Should not happen in a valid token)
          */
-        const std::string& get_id(std::error_code& ec) const
+        std::string get_id(std::error_code& ec) const
         {
             auto claimN = get_payload_claim("jti", ec);
             if (!ec)
@@ -1419,7 +1435,7 @@ namespace jwt
          * \return Requested claim
          * \throws std::runtime_error If claim was not present
          */
-        const claim& get_payload_claim(const std::string& name, std::error_code& ec) const
+        claim get_payload_claim(const std::string& name, std::error_code& ec) const
         {
             if (!has_payload_claim(name))
             {
@@ -1486,7 +1502,7 @@ namespace jwt
          * \throws std::runtime_error If claim was not present
          * \throws std::bad_cast Claim was present but not a string (Should not happen in a valid token)
          */
-        const std::string& get_algorithm(std::error_code& ec) const
+        std::string get_algorithm(std::error_code& ec) const
         {
             auto claimN = get_header_claim("alg", ec);
             if (!ec)
@@ -1504,7 +1520,7 @@ namespace jwt
          * \throws std::runtime_error If claim was not present
          * \throws std::bad_cast Claim was present but not a string (Should not happen in a valid token)
          */
-        const std::string& get_type(std::error_code& ec) const
+        std::string get_type(std::error_code& ec) const
         {
             auto claimN = get_header_claim("typ", ec);
             if (!ec)
@@ -1522,7 +1538,7 @@ namespace jwt
          * \throws std::runtime_error If claim was not present
          * \throws std::bad_cast Claim was present but not a string (Should not happen in a valid token)
          */
-        const std::string& get_content_type(std::error_code& ec) const
+        std::string get_content_type(std::error_code& ec) const
         {            
             auto claimN = get_header_claim("cty", ec);
             if (!ec)
@@ -1540,7 +1556,7 @@ namespace jwt
          * \throws std::runtime_error If claim was not present
          * \throws std::bad_cast Claim was present but not a string (Should not happen in a valid token)
          */
-        const std::string& get_key_id(std::error_code& ec) const
+        std::string get_key_id(std::error_code& ec) const
         {
             auto claimN = get_header_claim("kid", ec);
             if (!ec)
@@ -1565,7 +1581,7 @@ namespace jwt
          * \return Requested claim
          * \throws std::runtime_error If claim was not present
          */
-        const claim& get_header_claim(const std::string& name, std::error_code& ec) const
+        claim get_header_claim(const std::string& name, std::error_code& ec) const
         {
             if (!has_header_claim(name))
             {

@@ -56,13 +56,13 @@ void MissingDot()
         std::error_code ec;
         jwt::decode("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0.eyJpc3MiOiJhdXRoMCJ9", ec);
         TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec);
-        printf("%s :-> \"%s\"\n", ec.category().name(), ec.message());
+        printf("%s :-> \"%s\"\n", ec.category().name(), ec.message().c_str());
     }
     {
         std::error_code ec;
         jwt::decode("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0eyJpc3MiOiJhdXRoMCJ9.", ec);
         TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec);
-        printf("%s :-> \"%s\"\n", ec.category().name(), ec.message());
+        printf("%s :-> \"%s\"\n", ec.category().name(), ec.message().c_str());
     }
 }
 
@@ -71,7 +71,7 @@ void InvalidChar()
     std::error_code ec;
     jwt::decode("eyJhbGciOiJub25lIiwidHlwIjoiSldTIn0().eyJpc3MiOiJhdXRoMCJ9.", ec);
     TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec);
-    printf("%s :-> \"%s\"\n", ec.category().name(), ec.message());
+    printf("%s :-> \"%s\"\n", ec.category().name(), ec.message().c_str());
 }
 
 void InvalidJSON() 
@@ -79,7 +79,7 @@ void InvalidJSON()
     std::error_code ec;
     jwt::decode("YXsiYWxnIjoibm9uZSIsInR5cCI6IkpXUyJ9YQ.eyJpc3MiOiJhdXRoMCJ9.", ec);
     TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec);
-    printf("%s :-> \"%s\"\n", ec.category().name(), ec.message());
+    printf("%s :-> \"%s\"\n", ec.category().name(), ec.message().c_str());
 }
 
 void DecodeToken() 
@@ -223,7 +223,7 @@ void CreateTokenES256()
         
         // Signature verification exception commuted into std::error_code.
         TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec3);
-        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message());
+        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message().c_str());
     }
     {
         std::error_code ec3;
@@ -245,7 +245,7 @@ void CreateTokenES256NoPrivate()
 
     // Signature generation exception commuted into std::error_code.
     TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec);
-    printf("%s :-> \"%s\"\n", ec.category().name(), ec.message());
+    printf("%s :-> \"%s\"\n", ec.category().name(), ec.message().c_str());
 }
 
 void VerifyTokenRS256() 
@@ -307,7 +307,7 @@ void VerifyTokenRS256Fail()
     verify.verify(decoded_token, ec2);
     // Signature verification exception commuted into std::error_code.
     TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec2);
-    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message());
+    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message().c_str());
 }
 
 void VerifyTokenRS512() 
@@ -366,7 +366,7 @@ void VerifyTokenRS512Fail()
     verify.verify(decoded_token, ec2);
     // Signature verification exception commuted into std::error_code.
     TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec2);
-    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message());
+    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message().c_str());
 }
 
 void VerifyTokenHS256() 
@@ -408,7 +408,7 @@ void VerifyFail()
         verify.verify(decoded_token, ec3);
         // Token verification exception commuted into std::error_code.
         TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec3);
-        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message());
+        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message().c_str());
     }
     {
         auto verify = jwt::verify()
@@ -420,7 +420,7 @@ void VerifyFail()
         verify.verify(decoded_token, ec3);
         // Token verification exception commuted into std::error_code.
         TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec3);
-        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message());
+        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message().c_str());
     }
     {
         auto verify = jwt::verify()
@@ -432,7 +432,7 @@ void VerifyFail()
         verify.verify(decoded_token, ec3);
         // Token verification exception commuted into std::error_code.
         TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec3);
-        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message());
+        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message().c_str());
     }
     {
         auto verify = jwt::verify()
@@ -444,7 +444,7 @@ void VerifyFail()
         verify.verify(decoded_token, ec3);
         // Token verification exception commuted into std::error_code.
         TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec3);
-        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message());
+        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message().c_str());
     }
 }
 
@@ -479,7 +479,7 @@ void VerifyTokenES256Fail()
     verify.verify(decoded_token, ec2);    
     // Signature verification exception commuted into std::error_code.
     TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec2);
-    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message());
+    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message().c_str());
 }
 
 void VerifyTokenPS256() 
@@ -541,7 +541,7 @@ void VerifyTokenPS256Fail()
     verify.verify(decoded_token, ec2);    
     // Signature verification exception commuted into std::error_code.
     TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec2);
-    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message());
+    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message().c_str());
 }
 
 utest::v1::status_t test_setup(const size_t number_of_cases) 
