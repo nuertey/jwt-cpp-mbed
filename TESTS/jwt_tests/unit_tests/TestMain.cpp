@@ -15,6 +15,9 @@ namespace
     extern std::string ecdsa_priv_key;
     extern std::string ecdsa_pub_key;
     extern std::string ecdsa_pub_key_invalid;
+
+    extern std::string ecdsa_priv_key_new;
+    extern std::string ecdsa_pub_key_new;
 }
 
 using namespace utest::v1;
@@ -255,6 +258,7 @@ void CreateTokenPS256()
         .sign(jwt::algorithm::ps256(rsa_pub_key, rsa_priv_key, "", ""), actual);
 
     TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
+    printf("\n%s\n\n", token.c_str());
     // TODO: Find a better way to check if generated signature is valid
     // Can't do simple check for equal since pss adds random salt.
 }
@@ -269,6 +273,7 @@ void CreateTokenPS384()
         .sign(jwt::algorithm::ps384(rsa_pub_key, rsa_priv_key, "", ""), actual);
 
     TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
+    printf("\n%s\n\n", token.c_str());
     // TODO: Find a better way to check if generated signature is valid
     // Can't do simple check for equal since pss adds random salt.
 }
@@ -283,55 +288,59 @@ void CreateTokenPS512()
         .sign(jwt::algorithm::ps512(rsa_pub_key, rsa_priv_key, "", ""), actual);
 
     TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
+    printf("\n%s\n\n", token.c_str());
     // TODO: Find a better way to check if generated signature is valid
     // Can't do simple check for equal since pss adds random salt.
 }
 
 void CreateTokenES256() 
 {
-    std::error_code ec1;
+    std::error_code expect;
+    std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
         .set_type("JWS")
-        .sign(jwt::algorithm::es256("", ecdsa_priv_key, "", ""), ec1);
+        .sign(jwt::algorithm::es256("", ecdsa_priv_key, "", ""), actual);
 
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    auto decoded = jwt::decode(token, ec2);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec2);
+    std::error_code actual2;
+    auto decoded = jwt::decode(token, actual2);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual2.message().c_str());
+    printf("\n%s\n\n", token.c_str());
 
     {
-        std::error_code ec3;
+        std::error_code actual3;
         jwt::verify()
         .allow_algorithm(jwt::algorithm::es256(ecdsa_pub_key_invalid, "", "", ""))
-        .verify(decoded, ec3);
+        .verify(decoded, actual3);
         
         // Signature verification exception commuted into std::error_code.
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec3);
-        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message().c_str());
+        TEST_ASSERT_NOT_EQUAL(0, strcmp(expect.message().c_str(), actual3.message().c_str()));
+        printf("%s :-> \"%s\"\n", actual3.category().name(), actual3.message().c_str());
     }
     {
-        std::error_code ec3;
+        std::error_code actual3;
         jwt::verify()
         .allow_algorithm(jwt::algorithm::es256(ecdsa_pub_key, "", "", ""))
-        .verify(decoded, ec3);
+        .verify(decoded, actual3);
         
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec3);
+        TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual3.message().c_str());
     }
 }
 
 void CreateTokenES256NoPrivate() 
 {
-    std::error_code ec;
+    std::error_code expect;
+    std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
         .set_type("JWS")
-        .sign(jwt::algorithm::es256(ecdsa_pub_key, "", "", ""), ec);
+        .sign(jwt::algorithm::es256(ecdsa_pub_key, "", "", ""), actual);
 
     // Signature generation exception commuted into std::error_code.
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec);
-    printf("%s :-> \"%s\"\n", ec.category().name(), ec.message().c_str());
+    TEST_ASSERT_NOT_EQUAL(0, strcmp(expect.message().c_str(), actual.message().c_str()));
+    printf("%s :-> \"%s\"\n", actual.category().name(), actual.message().c_str());
 }
 
 void VerifyTokenRS256() 
@@ -345,13 +354,14 @@ void VerifyTokenRS256()
         .allow_algorithm(jwt::algorithm::rs256(rsa_pub_key, rsa_priv_key, "", ""))
         .with_issuer("auth0");
 
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);    
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec2);
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);    
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual2.message().c_str());
 }
 
 void VerifyTokenRS256PublicOnly() 
@@ -365,13 +375,14 @@ void VerifyTokenRS256PublicOnly()
         .allow_algorithm(jwt::algorithm::rs256(rsa_pub_key, "", "", ""))
         .with_issuer("auth0");
 
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);    
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec2);
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);    
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual2.message().c_str());
 }
 
 void VerifyTokenRS256Fail() 
@@ -385,15 +396,16 @@ void VerifyTokenRS256Fail()
         .allow_algorithm(jwt::algorithm::rs256(rsa_pub_key_invalid, "", "", ""))
         .with_issuer("auth0");
 
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);
     // Signature verification exception commuted into std::error_code.
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec2);
-    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message().c_str());
+    TEST_ASSERT_NOT_EQUAL(0, strcmp(expect.message().c_str(), actual2.message().c_str()));
+    printf("%s :-> \"%s\"\n", actual2.category().name(), actual2.message().c_str());
 }
 
 void VerifyTokenRS512() 
@@ -406,13 +418,14 @@ void VerifyTokenRS512()
         .allow_algorithm(jwt::algorithm::rs512(rsa512_pub_key, rsa512_priv_key, "", ""))
         .with_issuer("auth0");
 
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);    
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec2);
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);    
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual2.message().c_str());
 }
 
 void VerifyTokenRS512PublicOnly() 
@@ -425,13 +438,14 @@ void VerifyTokenRS512PublicOnly()
         .allow_algorithm(jwt::algorithm::rs512(rsa512_pub_key, "", "", ""))
         .with_issuer("auth0");
 
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);    
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec2);
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);    
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual2.message().c_str());
 }
 
 void VerifyTokenRS512Fail() 
@@ -444,15 +458,16 @@ void VerifyTokenRS512Fail()
         .allow_algorithm(jwt::algorithm::rs512(rsa_pub_key_invalid, "", "", ""))
         .with_issuer("auth0");
 
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);
     // Signature verification exception commuted into std::error_code.
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec2);
-    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message().c_str());
+    TEST_ASSERT_NOT_EQUAL(0, strcmp(expect.message().c_str(), actual2.message().c_str()));
+    printf("%s :-> \"%s\"\n", actual2.category().name(), actual2.message().c_str());
 }
 
 void VerifyTokenHS256() 
@@ -463,38 +478,40 @@ void VerifyTokenHS256()
         .allow_algorithm(jwt::algorithm::hs256{"secret"})
         .with_issuer("auth0");
 
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);    
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec2);
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);    
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual2.message().c_str());
 }
 
 void VerifyFail() 
 {
-    std::error_code ec1;
+    std::error_code expect;
+    std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
         .set_type("JWS")
-        .sign(jwt::algorithm::none{}, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+        .sign(jwt::algorithm::none{}, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    auto decoded_token = jwt::decode(token, ec2);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec2);
+    std::error_code actual2;
+    auto decoded_token = jwt::decode(token, actual2);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual2.message().c_str());
 
     {
         auto verify = jwt::verify()
             .allow_algorithm(jwt::algorithm::none{})
             .with_issuer("auth");
         
-        std::error_code ec3;
-        verify.verify(decoded_token, ec3);
+        std::error_code actual3;
+        verify.verify(decoded_token, actual3);
         // Token verification exception commuted into std::error_code.
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec3);
-        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message().c_str());
+        TEST_ASSERT_NOT_EQUAL(0, strcmp(expect.message().c_str(), actual3.message().c_str()));
+        printf("%s :-> \"%s\"\n", actual3.category().name(), actual3.message().c_str());
     }
     {
         auto verify = jwt::verify()
@@ -502,11 +519,11 @@ void VerifyFail()
             .with_issuer("auth0")
             .with_audience({"test"});
             
-        std::error_code ec3;
-        verify.verify(decoded_token, ec3);
+        std::error_code actual3;
+        verify.verify(decoded_token, actual3);
         // Token verification exception commuted into std::error_code.
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec3);
-        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message().c_str());
+        TEST_ASSERT_NOT_EQUAL(0, strcmp(expect.message().c_str(), actual3.message().c_str()));
+        printf("%s :-> \"%s\"\n", actual3.category().name(), actual3.message().c_str());
     }
     {
         auto verify = jwt::verify()
@@ -514,11 +531,11 @@ void VerifyFail()
             .with_issuer("auth0")
             .with_subject("test");
             
-        std::error_code ec3;
-        verify.verify(decoded_token, ec3);
+        std::error_code actual3;
+        verify.verify(decoded_token, actual3);
         // Token verification exception commuted into std::error_code.
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec3);
-        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message().c_str());
+        TEST_ASSERT_NOT_EQUAL(0, strcmp(expect.message().c_str(), actual3.message().c_str()));
+        printf("%s :-> \"%s\"\n", actual3.category().name(), actual3.message().c_str());
     }
     {
         auto verify = jwt::verify()
@@ -526,46 +543,50 @@ void VerifyFail()
             .with_issuer("auth0")
             .with_claim("myclaim", jwt::claim(std::string("test")));
             
-        std::error_code ec3;
-        verify.verify(decoded_token, ec3);
+        std::error_code actual3;
+        verify.verify(decoded_token, actual3);
         // Token verification exception commuted into std::error_code.
-        TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec3);
-        printf("%s :-> \"%s\"\n", ec3.category().name(), ec3.message().c_str());
+        TEST_ASSERT_NOT_EQUAL(0, strcmp(expect.message().c_str(), actual3.message().c_str()));
+        printf("%s :-> \"%s\"\n", actual3.category().name(), actual3.message().c_str());
     }
 }
 
 void VerifyTokenES256() 
 {
-    const std::string token = "eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhdXRoMCJ9.4iVk3-Y0v4RT4_9IaQlp-8dZ_4fsTzIylgrPTDLrEvTHBTyVS3tgPbr2_IZfLETtiKRqCg0aQ5sh9eIsTTwB1g";
+    const std::string token = "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.MEUCIQCXSt_UOWcx7S4PQFOmB7451rAJUssqnmLv-1br88uczgIgHDUqWoQ_5sdPYabXtoeOTQlCGDoHN2v4qEO7_1EVZ2o";
 
     auto verify = jwt::verify()
         .allow_algorithm(jwt::algorithm::es256(ecdsa_pub_key, "", "", ""));
     
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    printf("[Debug Decoding] %s :-> \"%s\"\n", actual.category().name(), actual.message().c_str());
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);    
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec2);
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);    
+    printf("[Debug Verification] %s :-> \"%s\"\n", actual2.category().name(), actual2.message().c_str());
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual2.message().c_str());
 }
 
 void VerifyTokenES256Fail() 
 {
-    const std::string token = "eyJhbGciOiJFUzI1NiJ9.eyJpc3MiOiJhdXRoMCJ9.4iVk3-Y0v4RT4_9IaQlp-8dZ_4fsTzIylgrPTDLrEvTHBTyVS3tgPbr2_IZfLETtiKRqCg0aQ5sh9eIsTTwB1g";
+    const std::string token = "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.MEUCIQCXSt_UOWcx7S4PQFOmB7451rAJUssqnmLv-1br88uczgIgHDUqWoQ_5sdPYabXtoeOTQlCGDoHN2v4qEO7_1EVZ2o";
 
     auto verify = jwt::verify()
         .allow_algorithm(jwt::algorithm::es256(ecdsa_pub_key_invalid, "", "", ""));
 
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);    
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);    
     // Signature verification exception commuted into std::error_code.
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec2);
-    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message().c_str());
+    TEST_ASSERT_NOT_EQUAL(0, strcmp(expect.message().c_str(), actual2.message().c_str()));
+    printf("%s :-> \"%s\"\n", actual2.category().name(), actual2.message().c_str());
 }
 
 void VerifyTokenPS256() 
@@ -579,13 +600,14 @@ void VerifyTokenPS256()
         .allow_algorithm(jwt::algorithm::ps256(rsa_pub_key, rsa_priv_key, "", ""))
         .with_issuer("auth0");
 
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);    
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec2);
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);    
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual2.message().c_str());
 }
 
 void VerifyTokenPS256PublicOnly() 
@@ -599,13 +621,14 @@ void VerifyTokenPS256PublicOnly()
         .allow_algorithm(jwt::algorithm::ps256(rsa_pub_key, "", "", ""))
         .with_issuer("auth0");
 
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);    
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec2);
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);    
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual2.message().c_str());
 }
 
 void VerifyTokenPS256Fail() 
@@ -619,15 +642,16 @@ void VerifyTokenPS256Fail()
         .allow_algorithm(jwt::algorithm::ps256(rsa_pub_key_invalid, "", "", ""))
         .with_issuer("auth0");
 
-    std::error_code ec1;
-    auto decoded_token = jwt::decode(token, ec1);
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) == ec1);
+    std::error_code expect;
+    std::error_code actual;
+    auto decoded_token = jwt::decode(token, actual);
+    TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
-    std::error_code ec2;
-    verify.verify(decoded_token, ec2);    
+    std::error_code actual2;
+    verify.verify(decoded_token, actual2);    
     // Signature verification exception commuted into std::error_code.
-    TEST_ASSERT(make_error_code(ErrorStatus_t::SUCCESS) != ec2);
-    printf("%s :-> \"%s\"\n", ec2.category().name(), ec2.message().c_str());
+    TEST_ASSERT_NOT_EQUAL(0, strcmp(expect.message().c_str(), actual2.message().c_str()));
+    printf("%s :-> \"%s\"\n", actual2.category().name(), actual2.message().c_str());
 }
 
 utest::v1::status_t test_setup(const size_t number_of_cases) 
@@ -754,6 +778,20 @@ VTr4+KEY+IeLvubHVmLUhbE5NgWXxrRpGasDqzKhCTmsa2Ysf712rl57SlH0Wz/M
 r3F7aM9YpErzeYLrl0GhQr9BVJxOvXcVd4kmY+XkiCcrkyS1cnghnllh+LCwQu1s
 YwIDAQAB
 -----END PUBLIC KEY-----)";
+    std::string ecdsa_priv_key_new = R"(-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIP0aLKFuX18FZl/YvKnOT850zWom8sHF4+Rj/0eI6Gd1oAoGCCqGSM49
+AwEHoUQDQgAEBGWBudlyQhR7NXronjnZ//md1LdkSxk7x+Csyuc0J/uItl4VxDFT
+XdH4+tiBe3/XIXtnQrzFe3PwZb/cawZ5mA==
+-----END EC PRIVATE KEY-----)";
+    std::string ecdsa_pub_key_new = R"(-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEBGWBudlyQhR7NXronjnZ//md1Ldk
+Sxk7x+Csyuc0J/uItl4VxDFTXdH4+tiBe3/XIXtnQrzFe3PwZb/cawZ5mA==
+-----END PUBLIC KEY-----)";
+    std::string ecdsa_pub_key_invalid = R"(-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEoBUyo8CQAFPeYPvv78ylh5MwFZjT
+CLQeb042TjiMJxG+9DLFmRSMlBQ9T/RsLLc+PmpB1+7yPAR+oR5gZn3kJQ==
+-----END PUBLIC KEY-----)";
+
     std::string ecdsa_priv_key = R"(-----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgPGJGAm4X1fvBuC1z
 SpO/4Izx6PXfNMaiKaS5RUkFqEGhRANCAARCBvmeksd3QGTrVs2eMrrfa7CYF+sX
@@ -762,9 +800,5 @@ sjyGg+Bo5mPKGH4Gs8M7oIvoP9pb/I85tdebtKlmiCZHAZE5w4DfJSV6
     std::string ecdsa_pub_key = R"(-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQgb5npLHd0Bk61bNnjK632uwmBfr
 F7I8hoPgaOZjyhh+BrPDO6CL6D/aW/yPObXXm7SpZogmRwGROcOA3yUleg==
------END PUBLIC KEY-----)";
-    std::string ecdsa_pub_key_invalid = R"(-----BEGIN PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEoBUyo8CQAFPeYPvv78ylh5MwFZjT
-CLQeb042TjiMJxG+9DLFmRSMlBQ9T/RsLLc+PmpB1+7yPAR+oR5gZn3kJQ==
 -----END PUBLIC KEY-----)";
 }
