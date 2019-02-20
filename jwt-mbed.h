@@ -777,7 +777,7 @@ namespace jwt
                     {
                         tr_debug("PSS-RSA calculated message digest(i.e. hash) successfully");
                         rc = mbedtls_pk_sign(&pk, mdinfo->type, md, 
-                                mdinfo->size, (unsigned char*)buffer, &sig_len, 
+                                0, (unsigned char*)buffer, &sig_len, 
                                 mbedtls_ctr_drbg_random, &ctr_drbg);
                     }
                     free(md);
@@ -830,6 +830,10 @@ namespace jwt
                     }
                     else
                     { 
+                        mbedtls_rsa_set_padding(mbedtls_pk_rsa(pk), 
+                                                MBEDTLS_RSA_PKCS_V21, 
+                                                m_messageDigestAlgorithm);
+                                            
                         // Calculate the message digest (i.e. hash) for the data.
                         const mbedtls_md_info_t *mdinfo = mbedtls_md_info_from_type(m_messageDigestAlgorithm);
                         unsigned char *md = (unsigned char *)calloc(mdinfo->size, sizeof(char));
@@ -844,7 +848,7 @@ namespace jwt
                         {
                             // Now verify the signature for the given hash of the data.
                             ret = mbedtls_pk_verify(&pk, 
-                                                    mdinfo->type, md, mdinfo->size,
+                                                    mdinfo->type, md, 0,
                                                     (const unsigned char*)signature.data(), 
                                                     signature.size());
 
@@ -2165,6 +2169,11 @@ namespace jwt
                 return;
             }
             algs.at(algo)->verify(data, sig, errCode);
+            if (errCode)
+            {
+                tr_warn("Token verification failed.");
+                return;                    
+            }
 
             auto assert_claim_eq = [](const decoded_jwt& jwt, 
                                       const std::string& key, 

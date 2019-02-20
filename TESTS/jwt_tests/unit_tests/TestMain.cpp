@@ -591,10 +591,7 @@ void VerifyTokenES256Fail()
 
 void VerifyTokenPS256() 
 {
-    std::string token = "eyJhbGciOiJQUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.CJ4XjVWdbV6vXGZkD4GdJbtYc80SN9cmPOqRhZBRzOyDRqTFE"
-        "4MsbdKyQuhAWcvuMOjn-24qOTjVMR_P_uTC1uG6WPLcucxZyLnbb56zbKnEklW2SX0mQnCGewr-93a_vDaFT6Cp45MsF_OwFPRCMaS5CJg-"
-        "N5KY67UrVSr3s9nkuK9ZTQkyODHfyEUh9F_FhRCATGrb5G7_qHqBYvTvaPUXqzhhpCjN855Tocg7A24Hl0yMwM-XdasucW5xNdKjG_YCkis"
-        "HX7ax--JiF5GNYCO61eLFteO4THUg-3Z0r4OlGqlppyWo5X5tjcxOZCvBh7WDWfkxA48KFZPRv0nlKA";
+    std::string token = "eyJhbGciOiJQUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.DphlByqmgs00-EWXehSlQKfdfqSFl6SPBsLowl5qfSEmnJoPQxPaTz3vTEnKKZKUs7guvoRmgI0_ikZ9POrsmjWsjQsu5-SKexjChoUa_2sH_3nhZfd7KeD626NT1bZGlDBDCVsY1LjT0N9VVw64lVsHz0qfnw4-vmXZ-H9LtTHxukUS-Hyz7A_nfNcen0iptoRs65HuxGkubbZ0tac4iZzCuBCP_lNw4Np0exaAnduLQZyqoMM8R_5VsLVrvt7m_c8M88fpFcLIE8iQ6Q4phAgKeSf-sTm1UU0h8jSQSyFXwpma2oDBDtOEKDUCwSeBgAhrOmQBkuuNG6ONXGjbmQ";
 
     auto verify = jwt::verify()
         .allow_algorithm(jwt::algorithm::ps256(rsa_pub_key, rsa_priv_key, "", ""))
@@ -612,10 +609,7 @@ void VerifyTokenPS256()
 
 void VerifyTokenPS256PublicOnly() 
 {
-    std::string token = "eyJhbGciOiJQUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.CJ4XjVWdbV6vXGZkD4GdJbtYc80SN9cmPOqRhZBRzOyDRqTFE"
-        "4MsbdKyQuhAWcvuMOjn-24qOTjVMR_P_uTC1uG6WPLcucxZyLnbb56zbKnEklW2SX0mQnCGewr-93a_vDaFT6Cp45MsF_OwFPRCMaS5CJg-"
-        "N5KY67UrVSr3s9nkuK9ZTQkyODHfyEUh9F_FhRCATGrb5G7_qHqBYvTvaPUXqzhhpCjN855Tocg7A24Hl0yMwM-XdasucW5xNdKjG_YCkis"
-        "HX7ax--JiF5GNYCO61eLFteO4THUg-3Z0r4OlGqlppyWo5X5tjcxOZCvBh7WDWfkxA48KFZPRv0nlKA";
+    std::string token = "eyJhbGciOiJQUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.DphlByqmgs00-EWXehSlQKfdfqSFl6SPBsLowl5qfSEmnJoPQxPaTz3vTEnKKZKUs7guvoRmgI0_ikZ9POrsmjWsjQsu5-SKexjChoUa_2sH_3nhZfd7KeD626NT1bZGlDBDCVsY1LjT0N9VVw64lVsHz0qfnw4-vmXZ-H9LtTHxukUS-Hyz7A_nfNcen0iptoRs65HuxGkubbZ0tac4iZzCuBCP_lNw4Np0exaAnduLQZyqoMM8R_5VsLVrvt7m_c8M88fpFcLIE8iQ6Q4phAgKeSf-sTm1UU0h8jSQSyFXwpma2oDBDtOEKDUCwSeBgAhrOmQBkuuNG6ONXGjbmQ";
 
     auto verify = jwt::verify()
         .allow_algorithm(jwt::algorithm::ps256(rsa_pub_key, "", "", ""))
@@ -633,10 +627,7 @@ void VerifyTokenPS256PublicOnly()
 
 void VerifyTokenPS256Fail() 
 {
-    std::string token = "eyJhbGciOiJQUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.CJ4XjVWdbV6vXGZkD4GdJbtYc80SN9cmPOqRhZBRzOyDRqTFE"
-        "4MsbdKyQuhAWcvuMOjn-24qOTjVMR_P_uTC1uG6WPLcucxZyLnbb56zbKnEklW2SX0mQnCGewr-93a_vDaFT6Cp45MsF_OwFPRCMaS5CJg-"
-        "N5KY67UrVSr3s9nkuK9ZTQkyODHfyEUh9F_FhRCATGrb5G7_qHqBYvTvaPUXqzhhpCjN855Tocg7A24Hl0yMwM-XdasucW5xNdKjG_YCkis"
-        "HX7ax--JiF5GNYCO61eLFteO4THUg-3Z0r4OlGqlppyWo5X5tjcxOZCvBh7WDWfkxA48KFZPRv0nlKA";
+    std::string token = "eyJhbGciOiJQUzI1NiIsInR5cCI6IkpXUyJ9.eyJpc3MiOiJhdXRoMCJ9.DphlByqmgs00-EWXehSlQKfdfqSFl6SPBsLowl5qfSEmnJoPQxPaTz3vTEnKKZKUs7guvoRmgI0_ikZ9POrsmjWsjQsu5-SKexjChoUa_2sH_3nhZfd7KeD626NT1bZGlDBDCVsY1LjT0N9VVw64lVsHz0qfnw4-vmXZ-H9LtTHxukUS-Hyz7A_nfNcen0iptoRs65HuxGkubbZ0tac4iZzCuBCP_lNw4Np0exaAnduLQZyqoMM8R_5VsLVrvt7m_c8M88fpFcLIE8iQ6Q4phAgKeSf-sTm1UU0h8jSQSyFXwpma2oDBDtOEKDUCwSeBgAhrOmQBkuuNG6ONXGjbmQ";
 
     auto verify = jwt::verify()
         .allow_algorithm(jwt::algorithm::ps256(rsa_pub_key_invalid, "", "", ""))
