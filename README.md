@@ -93,11 +93,12 @@ Then deploy the following image to the target under test and reboot:
 ## Usage Examples
 Please consult the test case application for comprehensive examples of how to use each feature of the library. That application is located in :
 
+```
 TESTS
 └── jwt_tests
     └── unit_tests
         └── TestMain.cpp
-
+```
 Just for the sake of brevity, here is a simple illustration of how to decode a token and print the claims :
 
 ```c++
@@ -119,7 +120,40 @@ int main()
     }
 }
 ```
-The above is just an illustration. For comprehensive examples that actually compile, consult the aforementioned test application.
+And another to show how to simply sign :
+```c++
+#include "mbed.h"
+#include "jwt-mbed.h"
+#include <cstring>
+
+int main() 
+{
+    std::error_code expect;
+    std::error_code actual;
+
+    std::set<std::string> audience;
+    audience.insert(std::string(GOOGLE_PROJECT_ID)); // GOOGLE_PROJECT_ID defined as const char *
+    jwt::date now = std::chrono::system_clock::now();
+    jwt::date expiry = now + std::chrono::hours(12);
+    
+    auto token = jwt::create()
+        .set_algorithm("RS256")
+        .set_type("JWS")
+        .set_audience(audience)
+        .set_issued_at(now)
+        .set_expires_at(expiry)
+        .sign(jwt::algorithm::rs256(GOOGLE_SSL_CLIENT_CERT_PEM,
+                                    GOOGLE_SSL_CLIENT_PRIVATE_KEY_PEM,
+                                    "", ""), actual); // Certificates defined as std::string
+
+    if (expect.message() == actual.message())
+    {
+        // No errors whilst signing. Go ahead and use token
+        printf("Generated JWT token := \n\t%s\n", token.c_str()); 
+    }
+}
+```
+The above are mere illustrations. For comprehensive examples that actually compile, consult the aforementioned test application.
 
 ## A Note on Dependencies
 * The MbedOS version was baselined off of mbed-os-5.11.4 but was modified locally to enable Unity/Utest compile.
