@@ -116,7 +116,7 @@ int main()
     if (expect.message() == actual.message())
     {
         for (auto& e : decoded.get_payload_claims())
-            printf("%s = %s\r\n", e.first.c_str(), e.second.to_json())
+            printf("%s = %s\r\n", e.first.c_str(), e.second.to_json().to_str().c_str());
     }
 }
 ```
@@ -125,6 +125,10 @@ And another to show how to simply sign :
 #include "mbed.h"
 #include "jwt-mbed.h"
 #include <cstring>
+
+// Define your GOOGLE_PROJECT_ID (const char *) here or some accessible elsewhere.
+// Define your GOOGLE_SSL_CLIENT_CERT_PEM (std::string) here or some accessible elsewhere.
+// Define your GOOGLE_SSL_CLIENT_PRIVATE_KEY_PEM (std::string) here or some accessible elsewhere.
 
 int main() 
 {
