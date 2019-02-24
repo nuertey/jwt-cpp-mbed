@@ -142,7 +142,7 @@ int main()
     
     auto token = jwt::create()
         .set_algorithm("RS256")
-        .set_type("JWS")
+        .set_type("JWT")
         .set_audience(audience)
         .set_issued_at(now)
         .set_expires_at(expiry)
