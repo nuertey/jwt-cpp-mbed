@@ -142,8 +142,9 @@ int main()
     //std::set<std::string> audience;
     //audience.insert(std::string(RECEPIENT_1));
     //audience.insert(std::string(RECEPIENT_2));
-    jwt::date now = std::chrono::system_clock::now();
-    jwt::date expiry = now + std::chrono::hours(12);
+    // std::chrono::system_clock::now() does not seem to work with Google Cloud IOT.
+    jwt::date now = std::chrono::system_clock::from_time_t(time(NULL));
+    jwt::date expiry = now + std::chrono::seconds(3600);
     
     auto token = jwt::create()
         .set_algorithm("RS256")
