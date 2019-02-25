@@ -1091,7 +1091,7 @@ namespace jwt
             : val(std::move(s))
         {}
         explicit claim(const date& s)
-            : val(int64_t(std::chrono::system_clock::to_time_t(s)))
+            : val(static_cast<int64_t>(std::chrono::system_clock::to_time_t(s)))
         {}
         explicit claim(const std::set<std::string>& s)
             : val(picojson::array(s.cbegin(), s.cend()))
@@ -1104,12 +1104,8 @@ namespace jwt
             : val(std::move(s))
         {}
         claim(const date& s)
-            : val(int64_t(std::chrono::system_clock::to_time_t(s)))
-        {
-            //auto timestamp = s;
-            //auto value = timestamp.time_since_epoch();
-            //val = reinterpret_cast<int64_t>(value.count());
-        }
+            : val(static_cast<int64_t>(std::chrono::system_clock::to_time_t(s)))
+        {}
         claim(const std::set<std::string>& s)
             : val(picojson::array(s.cbegin(), s.cend()))
         {}
@@ -1371,20 +1367,45 @@ namespace jwt
         }
         /**
          * Get audience claim
-         * \return audience as a set of strings
+         * \return audience as a set of strings or a single string 
          * \throws std::runtime_error If claim was not present
          * \throws std::bad_cast Claim was present but not a set (Should not happen in a valid token)
          */
-        std::set<std::string> get_audience(std::error_code& ec) const
+        template<typename T>
+        T get_audience(std::error_code& ec) const
         {
+            // TBD, Nuertey Odzeyem; assume for now that this method will
+            // give us either a proper decoded std::set() or std::string().
+            // I will have to later check the decoding to ensure that 
+            // this assumption holds true. 
             auto claimN = get_payload_claim("aud", ec);
             if (!ec)
-            { 
-                return claimN.as_set(ec);
+            {
+                std::error_code error1;
+                std::error_code error2;
+                 
+                auto audienceString = claimN.as_string(error1);
+                if (!error1)
+                {
+                    return audienceString;
+                }
+                else
+                {
+                    //std::set<std::string>
+                    auto audienceSet = claimN.as_set(error2);
+                    if (!error2)
+                    {
+                        return audienceSet;
+                    }
+                    else
+                    {
+                        return T();
+                    }
+                }
             }
             else
             {
-                return std::set<std::string>();
+                return T();
             }
         }
         /**
@@ -1923,10 +1944,19 @@ namespace jwt
         }
         /**
          * Set audience claim
-         * \param l Audience set
+         * \param l Audience set (principal recipients)
          * \return *this to allow for method chaining
          */
         builder& set_audience(const std::set<std::string>& l)
+        {
+            return set_payload_claim("aud", claim(l));
+        }
+        /**
+         * Set audience claim 
+         * \param l Audience string (special case of only 1 recipient)
+         * \return *this to allow for method chaining
+         */
+        builder& set_audience(const std::string& l)
         {
             return set_payload_claim("aud", claim(l));
         }
@@ -1996,8 +2026,12 @@ namespace jwt
                 return base;
             };
 
-            std::string header = encode(picojson::value(obj_header).serialize());
-            std::string payload = encode(picojson::value(obj_payload).serialize());
+            std::string headerTemp = picojson::value(obj_header).serialize();
+            std::string payloadTemp = picojson::value(obj_payload).serialize();
+            tr_debug("header : %s\n", headerTemp.c_str());
+            tr_debug("claim : %s\n", payloadTemp.c_str());
+            std::string header = encode(headerTemp);
+            std::string payload = encode(payloadTemp);
 
             std::string token = header + "." + payload;
 
@@ -2109,6 +2143,10 @@ namespace jwt
          * \return *this to allow chaining
          */
         verifier& with_audience(const std::set<std::string>& aud)
+        {
+            return with_claim("aud", claim(aud));
+        }
+        verifier& with_audience(std::string& aud)
         {
             return with_claim("aud", claim(aud));
         }
@@ -2407,24 +2445,36 @@ namespace jwt
                         return;
                     }
                     
-                    auto aud = jwt.get_audience(errCode);
-                    if (errCode)
+                    std::error_code err1;
+                    std::error_code err2;
+                    auto expectedSingleAudience = c.second.as_string(err1);
+                    auto expectedMultipleAudience = c.second.as_set(err2);
+
+                    if (!err1)
                     {
-                        tr_error("Decoded_jwt could not yield a valid audience");
-                        return; 
+                        std::string aud = jwt.get_audience<std::string>(errCode);
+                        if (errCode)
+                        {
+                            tr_error("Decoded_jwt could not yield a valid single principal audience");
+                            return; 
+                        }
+
+                        if (aud != expectedSingleAudience)
+                        {
+                            tr_error("Token audience does not match the required audience");
+                            errCode = make_error_code(ErrorStatus_t::TOKEN_VERIFICATION_ERROR);
+                            return;
+                        }
                     }
-                    
-                    std::error_code ec;
-                    auto expected = c.second.as_set(ec);
-                    if (ec)
+                    else if (!err2)
                     {
-                        tr_error("Expected_audience set could not be parsed");
-                        errCode = make_error_code(ErrorStatus_t::TOKEN_VERIFICATION_ERROR);
-                        return;                    
-                    }
-                    else
-                    {
-                        for (auto& e : expected)
+                        std::set<std::string> aud = jwt.get_audience<std::set<std::string> >(errCode);
+                        if (errCode)
+                        {
+                            tr_error("Decoded_jwt could not yield a valid multiple principal audience");
+                            return; 
+                        }
+                        for (auto& e : expectedMultipleAudience)
                         {
                             if (aud.count(e) == 0)
                             {
@@ -2433,6 +2483,12 @@ namespace jwt
                                 return;
                             }
                         }
+                    }
+                    else
+                    {
+                        tr_error("Token does not contain the required audience type");
+                        errCode = make_error_code(ErrorStatus_t::TOKEN_VERIFICATION_ERROR);
+                        return;
                     }
                 }
                 else

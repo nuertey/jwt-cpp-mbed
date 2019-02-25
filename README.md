@@ -135,8 +135,13 @@ int main()
     std::error_code expect;
     std::error_code actual;
 
-    std::set<std::string> audience;
-    audience.insert(std::string(GOOGLE_PROJECT_ID)); // GOOGLE_PROJECT_ID defined as const char *
+    // If only one principal recepient exists, use an std::string ...
+    std::string audience(GOOGLE_PROJECT_ID); // GOOGLE_PROJECT_ID defined as const char *
+
+    // Otherwise use an std::set<std::string> as below :
+    //std::set<std::string> audience;
+    //audience.insert(std::string(RECEPIENT_1));
+    //audience.insert(std::string(RECEPIENT_2));
     jwt::date now = std::chrono::system_clock::now();
     jwt::date expiry = now + std::chrono::hours(12);
     
