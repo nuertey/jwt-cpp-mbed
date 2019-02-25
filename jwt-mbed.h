@@ -1381,17 +1381,22 @@ namespace jwt
             auto claimN = get_payload_claim("aud", ec);
             if (!ec)
             {
-                std::error_code error1;
-                std::error_code error2;
-                 
-                auto audienceString = claimN.as_string(error1);
-                if (!error1)
+                if constexpr (std::is_same<T, std::string>::value)
                 {
-                    return audienceString;
+                    std::error_code error1;
+                    auto audienceString = claimN.as_string(error1);
+                    if (!error1)
+                    {
+                        return audienceString;
+                    }
+                    else
+                    {
+                        return T();
+                    }
                 }
-                else
+                else if constexpr (std::is_same<T, std::set<std::string> >::value)
                 {
-                    //std::set<std::string>
+                    std::error_code error2;
                     auto audienceSet = claimN.as_set(error2);
                     if (!error2)
                     {
@@ -2146,7 +2151,7 @@ namespace jwt
         {
             return with_claim("aud", claim(aud));
         }
-        verifier& with_audience(std::string& aud)
+        verifier& with_audience(const std::string& aud)
         {
             return with_claim("aud", claim(aud));
         }

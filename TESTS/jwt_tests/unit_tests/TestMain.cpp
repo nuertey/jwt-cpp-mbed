@@ -517,7 +517,7 @@ void VerifyFail()
         auto verify = jwt::verify()
             .allow_algorithm(jwt::algorithm::none{})
             .with_issuer("auth0")
-            .with_audience({"test"});
+            .with_audience("test");//.with_audience({"test"});
             
         std::error_code actual3;
         verify.verify(decoded_token, actual3);
