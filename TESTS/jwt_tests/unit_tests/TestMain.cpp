@@ -254,7 +254,7 @@ void CreateTokenPS256()
     std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
-        .set_type("JWS")
+        .set_type("JWT")
         .sign(jwt::algorithm::ps256(rsa_pub_key, rsa_priv_key, "", ""), actual);
 
     TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
@@ -269,7 +269,7 @@ void CreateTokenPS384()
     std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
-        .set_type("JWS")
+        .set_type("JWT")
         .sign(jwt::algorithm::ps384(rsa_pub_key, rsa_priv_key, "", ""), actual);
 
     TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
@@ -284,7 +284,7 @@ void CreateTokenPS512()
     std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
-        .set_type("JWS")
+        .set_type("JWT")
         .sign(jwt::algorithm::ps512(rsa_pub_key, rsa_priv_key, "", ""), actual);
 
     TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
@@ -299,7 +299,7 @@ void CreateTokenES256()
     std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
-        .set_type("JWS")
+        .set_type("JWT")
         .sign(jwt::algorithm::es256("", ecdsa_priv_key, "", ""), actual);
 
     TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
@@ -335,7 +335,7 @@ void CreateTokenES256NoPrivate()
     std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
-        .set_type("JWS")
+        .set_type("JWT")
         .sign(jwt::algorithm::es256(ecdsa_pub_key, "", "", ""), actual);
 
     // Signature generation exception commuted into std::error_code.
@@ -494,7 +494,7 @@ void VerifyFail()
     std::error_code actual;
     auto token = jwt::create()
         .set_issuer("auth0")
-        .set_type("JWS")
+        .set_type("JWT")
         .sign(jwt::algorithm::none{}, actual);
     TEST_ASSERT_EQUAL_STRING(expect.message().c_str(), actual.message().c_str());
 
