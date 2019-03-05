@@ -169,3 +169,27 @@ The above are mere illustrations. For comprehensive examples that actually compi
 * The MbedOS version was baselined off of mbed-os-5.11.4 but was modified locally to enable Unity/Utest compile.
 
 * The picojson version was baselined off of the mainstream (i.e. non-Mbed) version, commit 8ba7113451b745b6e4bd83db12f73eefbb315d2e. It was further modified locally in order to suppress all exceptions in a manner that makes sense on the Mbed platform. 
+
+## License
+MIT License
+
+Copyright (c) 2019 Nuertey Odzeyem
+Copyright (c) 2018 Dominik Thalhammer
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
